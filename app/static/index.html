@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alpine Linux</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white min-h-screen flex flex-col">
+  <header class="flex justify-end p-6">
+    <a href="#" class="text-sm font-medium text-gray-300 hover:text-white transition">Login / Sign Up</a>
+  </header>
+
+  <main class="flex-grow flex flex-col items-center justify-center text-center">
+    <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get my shit</h1>
+    <main class="flex-grow flex flex-col items-center justify-center text-center">
+  <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get my shit</h1>
+  <button
+    id="run-script-btn"
+    class="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-4 rounded-2xl shadow-lg transition transform hover:scale-105 duration-300"
+  >
+    Get Alpine Linux
+  </button>
+</main>
+
+<script>
+  document.getElementById('run-script-btn').addEventListener('click', async () => {
+    try {
+      const resp = await fetch('/api/run-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+
+      const data = await resp.json();
+      alert('Script started: ' + data.message);
+
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error running script: ' + err.message);
+    }
+  });
+</script>
+
+
+    </a>
+  </main>
+  <footer class="text-center text-sm text-gray-500 pb-4">
+    © 2025 Down Studio. Vibe coding only.
+  </footer>
+</body>
+</html>
