@@ -12,9 +12,9 @@
   </header>
 
   <main class="flex-grow flex flex-col items-center justify-center text-center">
-    <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get my shit</h1>
+    <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get</h1>
     <main class="flex-grow flex flex-col items-center justify-center text-center">
-  <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get my shit</h1>
+  <h1 class="text-4xl sm:text-5xl font-extrabold mb-8">Get</h1>
   <button
     id="run-script-btn"
     class="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-4 rounded-2xl shadow-lg transition transform hover:scale-105 duration-300"
@@ -37,7 +37,9 @@
       alert('Script started: ' + data.message);
 
       if (data.redirect) {
-        window.location.href = data.redirect;
+        setTimeout(() => {
+  window.location.href = data.redirect;
+}, 300);
       }
     } catch (err) {
       console.error(err);

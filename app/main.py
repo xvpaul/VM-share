@@ -1,40 +1,112 @@
 # main.py
+import time
+import socket
+import secrets
+import subprocess
+from pathlib import Path
+from typing import Dict
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-import subprocess
+
+from methods.vm import QemuOverlayManager
 
 app = FastAPI()
 
-# 1) Serve your existing index.html on GET /
 @app.get("/", response_class=FileResponse)
 async def serve_index():
     return FileResponse("static/index.html")
 
-# 2) Serve any other static assets (if you add CSS/JS/images) under /static/*
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 3) The POST endpoint your front‑end fetch() calls
+SESSIONS: Dict[str, dict] = {}           
+WEBSOCKIFY_PROCS: Dict[str, subprocess.Popen] = {} 
+
+
+def find_free_port() -> int:
+    """Return an available TCP port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def start_websockify(port: int, vnc_unix_sock: str) -> subprocess.Popen:
+    """
+    Bridge the QEMU UNIX VNC socket to TCP/WebSocket and serve /static on the same port.
+    Requires websockify to be installed and in PATH.
+    """
+    static_dir = Path(__file__).parent / "static"
+    cmd = [
+        "websockify",
+        "--web", str(static_dir),         
+        f"0.0.0.0:{port}",                
+        "--unix-target", vnc_unix_sock,   
+    ]
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
 @app.post("/api/run-script")
 async def run_vm_script(request: Request):
+    """
+    Launch a VM for this user, expose VNC via websockify, and return a redirect to noVNC.
+    """
     try:
-        data = await request.json()
-        cmd = ["bash", "../core/vm_scripts/AlpineLinux/runner.sh"]
-        if user_id := data.get("user_id"):
-            cmd.append(str(user_id))
+        user_id = str(int(time.time()))
+        vmid = secrets.token_hex(6)
 
+        manager = QemuOverlayManager(user_id)
+        manager.create_overlay()
+        meta = manager.boot_vm(vmid)  
+
+        port = find_free_port()
+        proc = start_websockify(port, meta["vnc_socket"])
+
+        SESSIONS[vmid] = {**meta, "http_port": port}
+        WEBSOCKIFY_PROCS[vmid] = proc
+
+        print(port)
+        command = [
+        "~/noVNC/utils/novnc_proxy",
+        "--listen", f'localhost:6080',
+        "--vnc", f'localhost:{port}'
+            ]
         subprocess.Popen(
-            cmd
+            command,
+            shell=True
         )
-
-        # Instead of redirecting directly, return URL to frontend
+        print(f'http://localhost:6080/vnc.html?host=localhost&port={port}')
         return JSONResponse({
-            "message": "VM launched",
-            "redirect": "http://localhost:6080/vnc.html"
+            "message": f"VM {user_id} launched (vmid={vmid})",
+            "vm": meta,
+            "redirect": f"http://localhost:6080/vnc.html?host=localhost&port={port}"
         })
 
     except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=e.stderr.strip())
+        raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vm/{vmid}/powerdown")
+async def powerdown(vmid: str):
+    """
+    Graceful ACPI shutdown via QMP, then stop the websockify bridge.
+    """
+    session = SESSIONS.get(vmid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Unknown vmid")
+
+    manager = QemuOverlayManager(session["user_id"])
+    ok = manager.powerdown(vmid)
+
+    # Stop websockify regardless; QEMU will finish shutting down shortly.
+    proc = WEBSOCKIFY_PROCS.pop(vmid, None)
+    if proc and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    return JSONResponse({"ok": bool(ok)})
