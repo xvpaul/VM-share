@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Alpine Linux</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f1115; --fg:#e6e6e6; --muted:#9aa1aa; }
+    html, body { height:100%; margin:0; background:var(--bg); color:var(--fg);
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .bar { height:48px; display:flex; align-items:center; gap:12px;
+      padding:0 16px; background:#0b0d11; border-bottom:1px solid #1a1f29; }
+    .title { font-weight:600; letter-spacing:.2px; }
+    .spacer { flex:1; }
+    .btn { border:1px solid #2a323e; background:#151922; color:var(--fg);
+      border-radius:10px; padding:8px 12px; cursor:pointer; font-size:14px; }
+    .btn:hover { border-color:#3a4352; }
+    .status { font-size:12px; color:var(--muted); padding:6px 16px; }
+    #screen { height:calc(100% - 48px - 24px); }
+    #screen > canvas { width:100%; height:100%; display:block; image-rendering: crisp-edges; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div class="title">Alpine Linux</div>
+    <div class="spacer"></div>
+    <button id="btn-full" class="btn">Fullscreen</button>
+    <button id="btn-disc" class="btn">Disconnect</button>
+  </div>
+  <div class="status" id="status">Connecting…</div>
+  <div id="screen"></div>
+
+  <!-- noVNC core library you copied -->
+ <script type="module">
+  import RFB from './core/rfb.js';
+
+  // Parse query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const host = urlParams.get("host") || "localhost";
+  const port = urlParams.get("port");
+  const path = "websockify";
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${proto}://${host}:${port}/${path}`;
+
+  const screen = document.getElementById("screen");
+  const status = document.getElementById("status");
+
+  const rfb = new RFB(screen, wsUrl, { credentials: {} });
+  rfb.viewOnly = false;
+  rfb.scaleViewport = true;
+  rfb.resizeSession = true;
+
+  rfb.addEventListener("connect", () => status.textContent = "Connected");
+  rfb.addEventListener("disconnect", (e) => {
+    status.textContent = "Disconnected";
+    if (e && e.detail && !e.detail.clean) status.textContent += " (error)";
+  });
+
+  document.getElementById("btn-disc").addEventListener("click", () => {
+    try { rfb.disconnect(); } catch(_) {}
+  });
+
+  document.getElementById("btn-full").addEventListener("click", async () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) { try { await el.requestFullscreen(); } catch(_) {} }
+    else { try { await document.exitFullscreen(); } catch(_) {} }
+  });
+</script>
+
+
+</body>
+</html>

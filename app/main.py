@@ -5,12 +5,15 @@ import secrets
 import subprocess
 from pathlib import Path
 from typing import Dict
+from pathlib import Path
+import os
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from methods.vm import QemuOverlayManager
+import configs  
 
 app = FastAPI()
 
@@ -21,7 +24,7 @@ async def serve_index():
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 SESSIONS: Dict[str, dict] = {}           
-WEBSOCKIFY_PROCS: Dict[str, subprocess.Popen] = {} 
+WEBSOCKIFY_PROCS: Dict[str, subprocess.Popen] = {}  
 
 
 def find_free_port() -> int:
@@ -39,49 +42,56 @@ def start_websockify(port: int, vnc_unix_sock: str) -> subprocess.Popen:
     static_dir = Path(__file__).parent / "static"
     cmd = [
         "websockify",
-        "--web", str(static_dir),         
-        f"0.0.0.0:{port}",                
+        "--web", str(static_dir),        
+        f"0.0.0.0:{port}",               
         "--unix-target", vnc_unix_sock,   
     ]
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-
 @app.post("/api/run-script")
 async def run_vm_script(request: Request):
     """
-    Launch a VM for this user, expose VNC via websockify, and return a redirect to noVNC.
+    Launch a VM for this user, expose VNC via websockify via noVNC, and redirect to custom UI.
     """
     try:
+        # Create unique VM ID and session ID
         user_id = str(int(time.time()))
         vmid = secrets.token_hex(6)
 
+        # Prepare and boot VM
         manager = QemuOverlayManager(user_id)
         manager.create_overlay()
-        meta = manager.boot_vm(vmid)  
+        meta = manager.boot_vm(vmid)
 
+        # Find an available local port and start websockify
         port = find_free_port()
         proc = start_websockify(port, meta["vnc_socket"])
 
+        # Track session and process
         SESSIONS[vmid] = {**meta, "http_port": port}
         WEBSOCKIFY_PROCS[vmid] = proc
 
-        print(port)
-        command = [
-        "~/noVNC/utils/novnc_proxy",
-        "--listen", f'localhost:6080',
-        "--vnc", f'localhost:{port}'
-            ]
-        subprocess.Popen(
-            command,
-            shell=True
-        )
-        print(f'http://localhost:6080/vnc.html?host=localhost&port={port}')
+        # Resolve path to custom UI directory
+        web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()
+
+        # Start noVNC proxy (pointing to your custom web interface)
+        command = f"~/noVNC/utils/novnc_proxy --listen localhost:6080 --vnc localhost:{port} --web /Users/soledaco/Desktop/pet/VM_share/app/static/novnc-ui"
+        subprocess.Popen(command, shell=True)
+
+        print(f"[INFO] VNC WebSocket running at: localhost:{port}")
+        print(f"[INFO] Serving UI from: {web_dir}")
+
+        # Redirect to your custom UI page (alpine.html)
         return JSONResponse({
             "message": f"VM {user_id} launched (vmid={vmid})",
             "vm": meta,
             "redirect": f"http://localhost:6080/vnc.html?host=localhost&port={port}"
         })
 
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
     except Exception as e:
@@ -100,7 +110,6 @@ async def powerdown(vmid: str):
     manager = QemuOverlayManager(session["user_id"])
     ok = manager.powerdown(vmid)
 
-    # Stop websockify regardless; QEMU will finish shutting down shortly.
     proc = WEBSOCKIFY_PROCS.pop(vmid, None)
     if proc and proc.poll() is None:
         proc.terminate()
@@ -110,3 +119,19 @@ async def powerdown(vmid: str):
             proc.kill()
 
     return JSONResponse({"ok": bool(ok)})
+
+
+"""
+ print(port)
+        web_dir = Path(__file__).parent / "static" / "novnc-ui"
+        command = [
+        "~/noVNC/utils/novnc_proxy",
+        "--listen", f'localhost:6080',
+        "--vnc", f'localhost:{port}',
+        "--web", str(web_dir)
+            ]
+        subprocess.Popen(
+            command,
+            shell=True
+        )
+"""
