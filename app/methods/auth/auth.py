@@ -54,6 +54,7 @@ class Authentification:
 
 
 async def get_current_user(request: Request) -> User:
+    print("🔐 [get_current_user] Authorization header:", request.headers.get("Authorization"))
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid token")

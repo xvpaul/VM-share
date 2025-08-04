@@ -2,25 +2,44 @@
 const menuBtn    = document.getElementById('menu-button');
 const menuPanel  = document.getElementById('menu-panel');
 const authBtn    = document.getElementById('auth-btn');
+const logoutBtn  = document.getElementById('logout-btn');    // ← new
 const authModal  = document.getElementById('auth-modal');
 const closeAuth  = document.getElementById('close-auth');
 const authForm   = document.getElementById('auth-form');
 
+// toggle login/logout button visibility based on token
+function updateAuthUI() {
+  const hasToken = !!localStorage.getItem('token');
+  authBtn.classList.toggle('hidden',  hasToken);
+  logoutBtn.classList.toggle('hidden', !hasToken);
+}
+
+// menu open/close
 menuBtn.addEventListener('click', e => {
   e.stopPropagation();
   menuPanel.classList.toggle('hidden');
 });
 
+// open auth modal
 authBtn.addEventListener('click', e => {
   e.stopPropagation();
   authModal.classList.remove('hidden');
   menuPanel.classList.add('hidden');
 });
 
+// logout action
+logoutBtn.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  updateAuthUI();
+  menuPanel.classList.add('hidden');
+});
+
+// close auth modal
 closeAuth.addEventListener('click', () => {
   authModal.classList.add('hidden');
 });
 
+// handle login/register form
 authForm.addEventListener('submit', async e => {
   e.preventDefault();
   const login    = document.getElementById('login-input').value.trim();
@@ -47,7 +66,10 @@ authForm.addEventListener('submit', async e => {
     }
 
     alert(`Success! Logged in as: ${login}`);
-    if (data.access_token) localStorage.setItem('token', data.access_token);
+    if (data.access_token) {
+      localStorage.setItem('token', data.access_token);
+      updateAuthUI();              // ← update UI on login
+    }
     authModal.classList.add('hidden');
 
   } catch (err) {
@@ -90,21 +112,25 @@ window.addEventListener('click', e => {
   });
 
   alpineBtn.addEventListener('click', async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('You must log in first.');
+      return;
+    }
+
     try {
       const resp = await fetch('/api/run-script', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({})
       });
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json();
       if (data.redirect) {
-        setTimeout(() => {
-          window.location.href = data.redirect;
-        }, 300);
+        setTimeout(() => window.location.href = data.redirect, 300);
       }
     } catch (err) {
       console.error(err);
@@ -116,3 +142,6 @@ window.addEventListener('click', e => {
     alert('Ubuntu VM is not implemented yet.');
   });
 })();
+
+// initialize auth UI on page load
+updateAuthUI();

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from methods.manager.OverlayManager import QemuOverlayManager
 from methods.database.database import get_db
-from methods.auth.auth    import get_current_user
+from methods.auth.auth    import Authentification, get_current_user
 from methods.database.models import User
 
 from utils import find_free_port, start_websockify
@@ -24,6 +24,7 @@ async def run_vm_script(
     db: Session = Depends(get_db)
 ):
     try:
+        print("🚀 [run_vm_script] got user:", user)
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
 
