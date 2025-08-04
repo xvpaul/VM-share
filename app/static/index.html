@@ -4,21 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Alpine Linux</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Decorative floating circles */
-    .float-slow { animation: float 12s ease-in-out infinite; }
-    .float-slower { animation: float 16s ease-in-out infinite; }
-    .float-slowest { animation: float 20s ease-in-out infinite; }
-    @keyframes float {
-      0%   { transform: translateY(0) translateX(0) scale(1); }
-      50%  { transform: translateY(-16px) translateX(8px) scale(1.03); }
-      100% { transform: translateY(0) translateX(0) scale(1); }
-    }
 
-    /* Smoothen hue updates */
-    #bg-hue-layer { transition: filter 80ms linear; }
-  </style>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Your custom styles -->
+  <link rel="stylesheet" href="static/css/index.css" />
 </head>
 
 <body class="relative text-white min-h-screen flex flex-col overflow-hidden">
@@ -43,7 +34,6 @@
 
   <!-- Header -->
   <header class="relative z-20">
-    <!-- Menu button positioned top-right -->
     <button id="menu-button" class="absolute top-4 right-4 px-4 py-2 bg-slate-700 rounded hover:bg-slate-600 z-30">
       Menu
     </button>
@@ -74,7 +64,6 @@
       </span>
     </h1>
 
-    <!-- Reveal/Action Toggle -->
     <div id="toggle-wrap" class="relative flex flex-col items-center">
       <button
         id="reveal-btn"
@@ -107,142 +96,7 @@
     © 2025 Ueban Studio. Vibe coding only.
   </footer>
 
-  <!-- Scripts -->
-  <script>
-    const menuBtn = document.getElementById('menu-button');
-    const menuPanel = document.getElementById('menu-panel');
-    const authBtn = document.getElementById('auth-btn');
-    const authModal = document.getElementById('auth-modal');
-    const closeAuth = document.getElementById('close-auth');
-    const authForm = document.getElementById('auth-form');
-
-
-    // Toggle dropdown
-    menuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      menuPanel.classList.toggle('hidden');
-    });
-
-    // Open modal
-    authBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      authModal.classList.remove('hidden');
-      menuPanel.classList.add('hidden');
-    });
-
-    // Close modal
-    closeAuth.addEventListener('click', () => {
-      authModal.classList.add('hidden');
-    });
-
-   // Handle registration form submission
-authForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const login = document.getElementById('login-input').value.trim();
-  const password = document.getElementById('password-input').value;
-
-  try {
-    const resp = await fetch('/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ login, password })
-    });
-
-    const text = await resp.text();  // ✅ read once
-
-    let data;
-    try {
-      data = JSON.parse(text);       // ✅ try parse JSON
-    } catch {
-      throw new Error(`Server error (${resp.status}): ${text}`);
-    }
-
-    if (!resp.ok) {
-      alert(`Registration failed: ${data.detail || data.message || "Unknown error"}`);
-      return;
-    }
-
-    alert(`Success! Logged in as: ${login}`);
-
-    if (data.access_token) {
-      localStorage.setItem('token', data.access_token);
-    }
-
-    authModal.classList.add('hidden');
-
-  } catch (err) {
-    console.error(err);
-    alert('An error occurred: ' + err.message);
-  }
-});
-
-
-
-    // Escape key for modal and vm choices
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        authModal.classList.add('hidden');
-        document.getElementById('vm-choice').classList.add('hidden');
-        document.getElementById('reveal-btn').classList.remove('hidden');
-      }
-    });
-
-    // Click outside to close modal
-    window.addEventListener('click', (e) => {
-      if (e.target === authModal) {
-        authModal.classList.add('hidden');
-      }
-    });
-
-    // VM choice reveal logic
-    (function () {
-      const wrap = document.getElementById('toggle-wrap');
-      const revealBtn = document.getElementById('reveal-btn');
-      const choiceContainer = document.getElementById('vm-choice');
-      const alpineBtn = document.getElementById('alpine-btn');
-      const ubuntuBtn = document.getElementById('ubuntu-btn');
-
-      revealBtn.addEventListener('mouseenter', () => {
-        revealBtn.classList.add('hidden');
-        choiceContainer.classList.remove('hidden');
-      });
-
-      wrap.addEventListener('mouseleave', () => {
-        choiceContainer.classList.add('hidden');
-        revealBtn.classList.remove('hidden');
-      });
-
-     alpineBtn.addEventListener('click', async () => {
-  try {
-    const resp = await fetch('/api/run-script', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({})
-    });
-
-    if (!resp.ok) throw new Error(await resp.text());
-
-    const data = await resp.json();
-    if (data.redirect) {
-      setTimeout(() => {
-        window.location.href = data.redirect;
-      }, 300);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Error running script: ' + err.message);
-  }
-});
-
-
-      ubuntuBtn.addEventListener('click', () => {
-        alert('Ubuntu VM is not implemented yet.');
-      });
-    })();
-  </script>
+  <!-- Your custom scripts -->
+  <script src="static/scripts/index.js"></script>
 </body>
 </html>
