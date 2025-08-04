@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
 
-import configs.config as configs
+import configs.vm_config as configs
 
 RUN_DIR = Path("/tmp/qemu")
 RUN_DIR.mkdir(parents=True, exist_ok=True)
@@ -17,7 +17,7 @@ class QemuOverlayManager:
         self.base_image = Path(configs.ALPINE_IMAGE_NAME)
         self.overlay_dir = Path(configs.ALPINE_OVERLAYS_DIR)
         self.overlay_dir.mkdir(parents=True, exist_ok=True)
-        self.user_id = user_id
+        self.user_id = int(user_id)
 
     def overlay_path(self) -> Path:
         return self.overlay_dir / f"alpine_{self.user_id}.qcow2"

@@ -3,17 +3,25 @@ import time
 import socket
 import secrets
 import subprocess
+import os
+import configs  
+import methods.auth as auth
+from sqlalchemy.orm import Session
+from methods.database.database import get_db
+from methods.database.models import User
+from methods.database.database import SessionLocal
 from pathlib import Path
 from typing import Dict
 from pathlib import Path
-import os
-
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from methods.manager.OverlayManager import QemuOverlayManager
+from methods.auth.auth import Authentification
+from methods.auth.auth import get_current_user
 
-from methods.vm import QemuOverlayManager
-import configs  
+
 
 app = FastAPI()
 
@@ -49,49 +57,40 @@ def start_websockify(port: int, vnc_unix_sock: str) -> subprocess.Popen:
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 @app.post("/api/run-script")
-async def run_vm_script(request: Request):
-    """
-    Launch a VM for this user, expose VNC via websockify via noVNC, and redirect to custom UI.
-    """
+async def run_vm_script(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     try:
-        # Create unique VM ID and session ID
-        user_id = str(int(time.time()))
+        user_id = str(user.id)
         vmid = secrets.token_hex(6)
 
-        # Prepare and boot VM
         manager = QemuOverlayManager(user_id)
         manager.create_overlay()
         meta = manager.boot_vm(vmid)
 
-        # Find an available local port and start websockify
         port = find_free_port()
         proc = start_websockify(port, meta["vnc_socket"])
 
-        # Track session and process
         SESSIONS[vmid] = {**meta, "http_port": port}
         WEBSOCKIFY_PROCS[vmid] = proc
 
-        # Resolve path to custom UI directory
-        web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()
-
-        # Start noVNC proxy (pointing to your custom web interface)
-        command = f"~/noVNC/utils/novnc_proxy --listen localhost:6080 --vnc localhost:{port} --web /Users/soledaco/Desktop/pet/VM_share/app/static/novnc-ui"
+        web_dir = (Path(__file__).parent.parent / "app" / "static" / "novnc-ui").resolve()
+        # web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()
+        print(web_dir)
+        command = f"~/noVNC/utils/novnc_proxy --listen localhost:6080 --vnc localhost:{port} --web {web_dir}"
         subprocess.Popen(command, shell=True)
 
         print(f"[INFO] VNC WebSocket running at: localhost:{port}")
         print(f"[INFO] Serving UI from: {web_dir}")
 
-        # Redirect to your custom UI page (alpine.html)
         return JSONResponse({
-            "message": f"VM {user_id} launched (vmid={vmid})",
+            "message": f"VM for user {user.login} launched (vmid={vmid})",
             "vm": meta,
             "redirect": f"http://localhost:6080/vnc.html?host=localhost&port={port}"
         })
 
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
     except Exception as e:
@@ -120,6 +119,56 @@ async def powerdown(vmid: str):
 
     return JSONResponse({"ok": bool(ok)})
 
+
+
+@app.post("/register")
+async def register_user(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    login = body.get("login")
+    password = body.get("password")
+
+    if not login or not password:
+        raise HTTPException(status_code=400, detail="Missing login or password")
+
+    existing_user = db.query(User).filter(User.login == login).first()
+
+    #User exists → try to authenticate
+    if existing_user:
+        if Authentification.verify_password(password, existing_user.hashed_password):
+            token = Authentification.create_access_token({"sub": existing_user.login})
+            return {
+                "message": "Logged in",
+                "id": existing_user.id,
+                "access_token": token,
+                "token_type": "bearer"
+            }
+        else:
+            raise HTTPException(status_code=401, detail="User already exists, wrong password")
+
+    #New user → register and login
+    hashed_pw = Authentification.hash_password(password)
+    new_user = User(login=login, hashed_password=hashed_pw)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token = Authentification.create_access_token({"sub": new_user.login})
+
+    return {
+        "message": "User registered",
+        "id": new_user.id,
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
+@app.post("/token")
+def login_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    auth = Authentification(form_data.username, form_data.password)
+    user = auth.authenticate_user(db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = auth.create_access_token({"sub": user.login})
+    return {"access_token": token, "token_type": "bearer"}
 
 """
  print(port)
