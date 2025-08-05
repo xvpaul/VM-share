@@ -51,8 +51,9 @@ async def run_vm_script(
             "redirect": f"http://{server_config.SERVER_HOST}:6080/vnc.html?host={server_config.SERVER_HOST}&port={port}"
         })
 
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     

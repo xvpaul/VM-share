@@ -72,7 +72,11 @@ class QemuOverlayManager:
             "-display", "none",
             "-daemonize",
         ]
-        subprocess.check_call(cmd)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"[QEMU ERROR]\nReturn code: {result.returncode}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         print(f"[>] QEMU started for user {self.user_id} (vmid={vmid})")
 
         return {
