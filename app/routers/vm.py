@@ -41,7 +41,7 @@ async def run_vm_script(
         novnc_proxy = Path.home() / "noVNC/utils/novnc_proxy"
 
         subprocess.Popen(
-            f"{novnc_proxy} --listen localhost:6080 --vnc localhost:{port} --web {web_dir}",
+            f"{novnc_proxy} --listen 0.0.0.0:6080 --vnc localhost:{port} --web {web_dir}",
             shell=True
         )
 
