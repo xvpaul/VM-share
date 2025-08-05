@@ -1,6 +1,9 @@
+# VM_share/app/configs/vm_config.py
+from pathlib import Path
+VM_SHARE_ROOT = Path(__file__).resolve().parents[2] 
 ALPINE_IMAGE_NAME = 'alpine.qcow2'
-ALPINE_IMAGE_PATH = '/Users/soledaco/Desktop/pet'
-ALPINE_OVERLAYS_DIR = '/Users/soledaco/Desktop/pet'
+ALPINE_IMAGE_PATH = str(VM_SHARE_ROOT / "base_images" / "Alpine_Linux")
+ALPINE_OVERLAYS_DIR = str(VM_SHARE_ROOT / "overlays" / "Alpine_Linux")
 ALPINE_MEMORY = 512
-NOVNC_PROXY = '~/noVNC/utils/novnc_proxy'
-NOVNC_WEB = '~/noVNC'
+NOVNC_PROXY = str(Path.home() / "noVNC/utils/novnc_proxy")
+NOVNC_WEB = str(Path.home() / "noVNC")

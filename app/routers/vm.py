@@ -5,6 +5,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from configs import server_config
 from methods.manager.OverlayManager import QemuOverlayManager
 from methods.database.database import get_db
 from methods.auth.auth import Authentification, get_current_user
@@ -37,15 +38,17 @@ async def run_vm_script(
         WEBSOCKIFY_PROCS[vmid] = proc
 
         web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()
+        novnc_proxy = Path.home() / "noVNC/utils/novnc_proxy"
+
         subprocess.Popen(
-            f"~/noVNC/utils/novnc_proxy --listen localhost:6080 --vnc localhost:{port} --web {web_dir}",
+            f"{novnc_proxy} --listen localhost:6080 --vnc localhost:{port} --web {web_dir}",
             shell=True
         )
 
         return JSONResponse({
             "message": f"VM for user {user.login} launched (vmid={vmid})",
             "vm": meta,
-            "redirect": f"http://localhost:6080/vnc.html?host=localhost&port={port}"
+            "redirect": f"http://{server_config.SERVER_HOST}:6080/vnc.html?host={server_config.SERVER_HOST}&port={port}"
         })
 
     except subprocess.CalledProcessError as e:
