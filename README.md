@@ -1,5 +1,6 @@
 # VM_share
 uvicorn main:app --reload
+new run: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 Installation: qemu-img create -f qcow2 alpine_disk.qcow2 2G
 
 qemu-system-x86_64 \
@@ -147,3 +148,12 @@ pip3 freeze >> requirements.txt
 
 
 ssh root@83.69.248.229
+
+
+postgre setup:  CREATE USER adm_user WITH PASSWORD
+                postgres=# create database auth_db
+                postgres-# create user adm_user with password 111
+                postgres-# grant all privileges on database auth_db to adm_user
+                postgres-# \q
+
+
