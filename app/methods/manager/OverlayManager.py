@@ -18,7 +18,7 @@ class QemuOverlayManager:
     def __init__(self, user_id: str):
         self.base_image = Path(configs.ALPINE_IMAGE_NAME)
         self.overlay_dir = Path(configs.ALPINE_OVERLAYS_DIR)
-        self.overlay_dir.mkdir(parents=True, exist_ok=True)
+        # self.overlay_dir.mkdir(parents=True, exist_ok=True)
         self.user_id = user_id
 
     def overlay_path(self) -> Path:
