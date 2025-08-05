@@ -13,3 +13,28 @@
 #bg-hue-layer {
   transition: filter 80ms linear;
 }
+
+/* define the hue-rotate animation */
+@keyframes hueShift {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+/* always have the animation ready, but paused by default */
+#bg-hue-layer {
+  /* full cycle every 4s */
+  animation: hueShift 4s linear infinite;
+  /* start paused so it stays at whatever frame it has */
+  animation-play-state: paused;
+  /* when you unhover, fade back to 0° over 0.3s */
+  transition: filter 0.3s ease-out;
+  /* ensure base state */
+  filter: hue-rotate(0deg);
+}
+
+/* on hover, run the animation and disable the transition */
+body:hover #bg-hue-layer {
+  animation-play-state: running;
+  /* turning off the transition avoids conflict with the running animation */
+  transition: none;
+}

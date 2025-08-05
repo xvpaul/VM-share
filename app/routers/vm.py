@@ -2,14 +2,12 @@ import secrets
 import subprocess
 from pathlib import Path
 from typing import Dict
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-
 from methods.manager.OverlayManager import QemuOverlayManager
 from methods.database.database import get_db
-from methods.auth.auth    import Authentification, get_current_user
+from methods.auth.auth import Authentification, get_current_user
 from methods.database.models import User
 
 from utils import find_free_port, start_websockify
@@ -54,22 +52,4 @@ async def run_vm_script(
         raise HTTPException(status_code=500, detail=e.stderr.strip() or str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/{vmid}/powerdown")
-async def powerdown(vmid: str):
-    session = SESSIONS.get(vmid)
-    if not session:
-        raise HTTPException(status_code=404, detail="Unknown vmid")
-
-    manager = QemuOverlayManager(session["user_id"])
-    ok = manager.powerdown(vmid)
-
-    proc = WEBSOCKIFY_PROCS.pop(vmid, None)
-    if proc and proc.poll() is None:
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-    return JSONResponse({"ok": bool(ok)})
+    

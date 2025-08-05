@@ -2,7 +2,9 @@
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
-
+import socket
+import json
+import time
 import configs.vm_config as configs
 
 RUN_DIR = Path("/tmp/qemu")
@@ -81,33 +83,52 @@ class QemuOverlayManager:
             "qmp_socket": str(qmp_sock),
             "started_at": datetime.utcnow().isoformat() + "Z",
         }
+    
+    @staticmethod
+    def cleanup_unused_overlays(overlays_root: Path, older_than_seconds: int = 3600):
+        """
+        Remove overlay directories older than a given threshold.
 
-    # def powerdown(self, vmid: str) -> bool:
-    #     """
-    #     Graceful ACPI shutdown via QMP; fall back to kill if needed outside this class.
-    #     """
-    #     import json
-    #     import time
+        :param overlays_root: Path to the directory containing VM overlay folders
+        :param older_than_seconds: Age threshold in seconds; directories older than this are removed
+        """
+        now = time.time()
+        if not overlays_root.exists() or not overlays_root.is_dir():
+            return
 
-    #     _, qmp_sock = self._socket_paths(vmid)
-    #     try:
-    #         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-    #             s.settimeout(2.0)
-    #             s.connect(str(qmp_sock))
+        for overlay_dir in overlays_root.iterdir():
+            try:
+                if overlay_dir.is_dir():
+                    mtime = overlay_dir.stat().st_mtime
+                    if now - mtime > older_than_seconds:
+                        shutil.rmtree(overlay_dir)
+                        print(f"[CLEANUP] Removed stale overlay: {overlay_dir}")
+            except Exception as e:
+                print(f"[CLEANUP ERROR] Cannot remove {overlay_dir}: {e}")
 
-    #             def send(obj):
-    #                 s.sendall((json.dumps(obj) + "\n").encode("utf-8"))
+    @staticmethod
+    def cleanup_stale_processes(procs: dict, older_than_seconds: int = 3600):
+        """
+        Terminate websockify processes that have exited or been running too long.
 
-    #             # Read greeting
-    #             s.recv(4096)
+        :param procs: Dict mapping vmid to (subprocess.Popen, start_time)
+        :param older_than_seconds: Maximum allowed runtime; processes older than this are killed
+        """
+        now = time.time()
+        for vmid, (proc, start_time) in list(procs.items()):
+            # If process has already exited, remove from tracking
+            if proc.poll() is not None:
+                procs.pop(vmid, None)
+                print(f"[CLEANUP] Removed completed process for VM {vmid}")
+                continue
 
-    #             send({"execute": "qmp_capabilities"})
-    #             s.recv(4096)
-
-    #             send({"execute": "system_powerdown"})
-    #             # Give the guest some time to shutdown
-    #             time.sleep(2)
-    #             return True
-    #     except Exception as e:
-    #         print(f"[!] QMP powerdown failed: {e}")
-    #         return False
+            # If running too long, terminate it
+            if now - start_time > older_than_seconds:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                finally:
+                    procs.pop(vmid, None)
+                    print(f"[CLEANUP] Killed stale process for VM {vmid}")
