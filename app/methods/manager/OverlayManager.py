@@ -16,7 +16,7 @@ class QemuOverlayManager:
     Integrate with a small session registry (DB/Redis) outside this class.
     """
     def __init__(self, user_id: str):
-        self.base_image = Path(configs.ALPINE_IMAGE_NAME)
+        self.base_image = Path(configs.ALPINE_IMAGE_PATH)
         self.overlay_dir = Path(configs.ALPINE_OVERLAYS_DIR)
         # self.overlay_dir.mkdir(parents=True, exist_ok=True)
         self.user_id = user_id
