@@ -63,7 +63,7 @@ class QemuOverlayManager:
         mem = str(memory_mb or configs.ALPINE_MEMORY)
         cmd = [
             "qemu-system-x86_64",
-            "-accel", "hvf",
+            "-enable-kvm",
             "-m", mem,
             "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
