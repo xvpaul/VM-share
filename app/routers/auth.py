@@ -13,28 +13,26 @@ from methods.database.models import User
 Logging configuration 
 """
 
-logging.basicConfig(
-    filename=logs.LOG_NAME,
-    level=logging.INFO,
-    format='%(asctime)s.%(msecs)05d %(message)s',
-    datefmt='%Y-%m-%d %H-%M-%S',
-)
+log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
 
 try:
-    log_dir = os.path.dirname(logs.LOG_DIR)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    with open(logs.LOG_DIR, 'a'):
-        pass
+    os.makedirs(logs.LOG_DIR, exist_ok=True)
+    logging.basicConfig(
+        filename=log_file_path,
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs)05d %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
 
 except Exception as e:
     print(f'Error: {e}')
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s.%(msecs) %(message)s',
+        format='%(asctime)s.%(msecs)05d %(message)s',
         datefmt='%Y-%m-%d %H-%M-%S',
     )
     logging.error(f"Failed to initialize file logging: {e}")
+
 
 
 router = APIRouter()
