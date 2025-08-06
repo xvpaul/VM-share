@@ -66,7 +66,7 @@ async def run_vm_script(
         logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
 
         manager = QemuOverlayManager(user_id, vmid)
-        overlay_path = manager.create_overlay(vmid)
+        overlay_path = manager.create_overlay()
         logging.info(f"VM_share/app/routers/vm.py: Overlay ready at {overlay_path}")
 
         meta = manager.boot_vm(vmid)
