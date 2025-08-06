@@ -73,7 +73,7 @@ async def run_vm_script(
         logging.info(f"VM_share/app/routers/vm.py: VM booted for user {user.login} (vmid={vmid})")
 
         port = find_free_port()
-        proc = start_websockify(port, meta["vnc_socket"])
+        proc = start_websockify(vmid, port, meta["vnc_socket"])
         logging.info(f"VM_share/app/routers/vm.py: Websockify started on port {port} for VM {vmid}")
 
         SESSIONS[vmid] = {**meta, "http_port": port}
