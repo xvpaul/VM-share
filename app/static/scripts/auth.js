@@ -1,3 +1,4 @@
+// auth.js
 export function setupAuth() {
   const authBtn    = document.getElementById('auth-btn');
   const logoutBtn  = document.getElementById('logout-btn');
