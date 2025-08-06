@@ -24,12 +24,12 @@ export function setupAuth() {
   });
 
   tabSignup.addEventListener("click", () => {
-    signupForm.classList.remove("hidden");
-    loginForm.classList.add("hidden");
-    tabSignup.classList.add("border-sky-500", "text-white");
-    tabLogin.classList.remove("border-sky-500", "text-white");
-    tabLogin.classList.add("text-white/60");
-  });
+  signupForm.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+  tabSignup.classList.add("border-sky-500", "text-white");
+  tabLogin.classList.remove("border-sky-500", "text-white");
+  tabLogin.classList.add("text-white/60");
+});
 
   authBtn.addEventListener('click', e => {
     e.stopPropagation();
