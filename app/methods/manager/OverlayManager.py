@@ -51,9 +51,9 @@ class QemuOverlayManager:
     def overlay_path(self, vmid) -> Path:
         return self.overlay_dir / f"alpine_{vmid}.qcow2"
 
-    def create_overlay(self) -> Path:
+    def create_overlay(self, vmid) -> Path:
         try:
-            overlay = self.overlay_path()
+            overlay = self.overlay_path(vmid)
             if overlay.exists():
                 logging.info(f"VM_share/app/methods/OverlayManager.py: Overlay already exists for user {self.user_id}: {overlay}")
                 return overlay
