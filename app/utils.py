@@ -17,6 +17,7 @@ def start_websockify(port: int, vnc_unix_sock: str) -> subprocess.Popen:
     cmd = [
         "websockify",
         "--web", str(static_dir),
+        "--verbose", 
         f"0.0.0.0:{port}",
         "--unix-target", vnc_unix_sock,
     ]
