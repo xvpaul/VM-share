@@ -13,7 +13,7 @@ from methods.manager.OverlayManager import QemuOverlayManager
 from methods.database.database import get_db
 from methods.auth.auth import Authentification, get_current_user
 from methods.database.models import User
-from utils import find_free_port, start_websockify
+from utils import find_free_port, start_websockify, cleanup_vm
 import configs.log_config as logs
 
 
@@ -66,7 +66,7 @@ async def run_vm_script(
         logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
 
         manager = QemuOverlayManager(user_id)
-        overlay_path = manager.create_overlay()
+        overlay_path = manager.create_overlay(vmid)
         logging.info(f"VM_share/app/routers/vm.py: Overlay ready at {overlay_path}")
 
         meta = manager.boot_vm(vmid)

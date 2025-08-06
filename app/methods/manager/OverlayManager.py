@@ -48,8 +48,8 @@ class QemuOverlayManager:
         # self.overlay_dir.mkdir(parents=True, exist_ok=True) <-- of no use anymore 
         self.user_id = user_id
 
-    def overlay_path(self) -> Path:
-        return self.overlay_dir / f"alpine_{self.user_id}.qcow2"
+    def overlay_path(self, vmid) -> Path:
+        return self.overlay_dir / f"alpine_{vmid}.qcow2"
 
     def create_overlay(self) -> Path:
         try:
