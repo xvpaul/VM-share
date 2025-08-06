@@ -2,9 +2,10 @@
 const menuBtn    = document.getElementById('menu-button');
 const menuPanel  = document.getElementById('menu-panel');
 const authBtn    = document.getElementById('auth-btn');
-const logoutBtn  = document.getElementById('logout-btn');    // ← new
+const logoutBtn  = document.getElementById('logout-btn');
 const authModal  = document.getElementById('auth-modal');
 const closeAuth  = document.getElementById('close-auth');
+
 // Tab switching
 const tabLogin   = document.getElementById("tab-login");
 const tabSignup  = document.getElementById("tab-signup");
@@ -16,7 +17,7 @@ tabLogin.addEventListener("click", () => {
   loginForm.classList.remove("hidden");
   signupForm.classList.add("hidden");
   tabLogin.classList.add("border-sky-500", "text-white");
-  tabSignup.classList.remove("border-sky-500");
+  tabSignup.classList.remove("border-sky-500", "text-white");
   tabSignup.classList.add("text-white/60");
 });
 
@@ -24,37 +25,43 @@ tabSignup.addEventListener("click", () => {
   signupForm.classList.remove("hidden");
   loginForm.classList.add("hidden");
   tabSignup.classList.add("border-sky-500", "text-white");
-  tabLogin.classList.remove("border-sky-500");
+  tabLogin.classList.remove("border-sky-500", "text-white");
   tabLogin.classList.add("text-white/60");
 });
 
-// toggle login/logout button visibility based on token
+// Toggle login/logout button visibility based on token
 function updateAuthUI() {
   const hasToken = !!localStorage.getItem('token');
   authBtn.classList.toggle('hidden',  hasToken);
   logoutBtn.classList.toggle('hidden', !hasToken);
 }
 
-// menu open/close
+// Menu open/close
 menuBtn.addEventListener('click', e => {
   e.stopPropagation();
   menuPanel.classList.toggle('hidden');
 });
 
-// open auth modal
+// Open auth modal
 authBtn.addEventListener('click', e => {
   e.stopPropagation();
   authModal.classList.remove('hidden');
   menuPanel.classList.add('hidden');
 });
 
-// logout action
+// Logout action
 logoutBtn.addEventListener('click', () => {
   localStorage.removeItem('token');
   updateAuthUI();
   menuPanel.classList.add('hidden');
 });
 
+// Close modal
+closeAuth.addEventListener('click', () => {
+  authModal.classList.add('hidden');
+});
+
+// Handle login form
 loginForm.addEventListener('submit', async e => {
   e.preventDefault();
   const login    = document.getElementById('login-input').value.trim();
@@ -94,11 +101,7 @@ loginForm.addEventListener('submit', async e => {
   }
 });
 
-// close auth modal
-closeAuth.addEventListener('click', () => {
-  authModal.classList.add('hidden');
-});
-
+// Handle signup form
 signupForm.addEventListener('submit', async e => {
   e.preventDefault();
   const login    = document.getElementById('signup-login').value.trim();
@@ -138,7 +141,7 @@ signupForm.addEventListener('submit', async e => {
   }
 });
 
-// Global key + click handlers
+// Global keyboard + click
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     authModal.classList.add('hidden');
@@ -153,7 +156,7 @@ window.addEventListener('click', e => {
   }
 });
 
-// VM choice reveal logic
+// VM choice logic
 (function() {
   const wrap         = document.getElementById('toggle-wrap');
   const revealBtn    = document.getElementById('reveal-btn');
@@ -203,5 +206,5 @@ window.addEventListener('click', e => {
   });
 })();
 
-// initialize auth UI on page load
+// Init
 updateAuthUI();
