@@ -158,3 +158,8 @@ postgre setup:  CREATE USER adm_user WITH PASSWORD
 
 
 Things to learn added: threads and signals 
+
+ps aux | grep qemu
+ps aux | grep vnc-dd7df11ce297.sock
+find /tmp/qemu/ -type s
+lsof | grep /tmp/qemu/
