@@ -42,18 +42,36 @@
     <button id="logout-btn" class="w-full text-left px-4 py-2 hover:bg-slate-700 hidden">Log out</button>    </div>
   </header>
 
-  <!-- Auth Modal -->
-  <div id="auth-modal" class="fixed inset-0 hidden items-center justify-center bg-black/60 backdrop-blur z-40">
-    <div class="bg-slate-800 p-6 rounded-xl w-80 relative">
-      <button id="close-auth" class="absolute top-2 right-3 text-2xl">&times;</button>
-      <h2 class="text-lg font-semibold text-center mb-4">Register / Sign In</h2>
-      <form id="auth-form" class="flex flex-col space-y-4">
-        <input id="login-input" name="login" type="text" required placeholder="Login" class="px-4 py-2 bg-slate-700 rounded text-white" />
-        <input id="password-input" name="password" type="password" required placeholder="Password" class="px-4 py-2 bg-slate-700 rounded text-white" />
-        <button type="submit" class="bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded font-semibold">Continue</button>
-      </form>
+ <!-- Auth Modal -->
+<div id="auth-modal" class="fixed inset-0 hidden items-center justify-center bg-black/60 backdrop-blur z-40">
+  <div class="bg-slate-800 p-6 rounded-xl w-96 relative shadow-2xl">
+    <button id="close-auth" class="absolute top-2 right-3 text-2xl text-white/80 hover:text-white">&times;</button>
+
+    <h2 class="text-2xl font-bold text-center mb-6">Welcome</h2>
+
+    <div class="flex justify-center gap-6 mb-6">
+      <button id="tab-login" class="text-white border-b-2 border-sky-500 font-semibold">Log In</button>
+      <button id="tab-signup" class="text-white/60 hover:text-white font-semibold">Sign Up</button>
     </div>
+
+    <!-- Log In Form -->
+    <form id="login-form" class="tab-form flex flex-col space-y-4">
+      <input id="login-input" type="text" placeholder="Login" required class="px-4 py-2 bg-slate-700 rounded text-white" />
+      <input id="password-input" type="password" placeholder="Password" required class="px-4 py-2 bg-slate-700 rounded text-white" />
+      <button type="submit" class="bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded font-semibold">Log In</button>
+    </form>
+
+    <!-- Sign Up Form -->
+    <form id="signup-form" class="tab-form hidden flex flex-col space-y-4">
+      <input id="signup-login" type="text" placeholder="Login" required class="px-4 py-2 bg-slate-700 rounded text-white" />
+      <input id="signup-password" type="password" placeholder="Password" required class="px-4 py-2 bg-slate-700 rounded text-white" />
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded font-semibold">Sign Up</button>
+    </form>
+
+    <p id="auth-msg" class="text-center text-red-400 text-sm mt-4"></p>
   </div>
+</div>
+
 
   <!-- Main Content -->
   <main class="relative z-10 flex-grow flex flex-col items-center justify-center text-center px-6">
@@ -93,7 +111,7 @@
   <footer class="relative z-10 text-center text-sm text-white/50 pb-6">
     <div id="contacts" class="mb-2"></div>
     <div id="login" class="mb-2"></div>
-    © 2025 Ueban Studio. Vibe coding only.
+    © 2025 Made by ueban. Vibe coding only.
   </footer>
 
   <!-- Your custom scripts -->

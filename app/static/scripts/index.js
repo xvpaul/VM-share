@@ -5,7 +5,28 @@ const authBtn    = document.getElementById('auth-btn');
 const logoutBtn  = document.getElementById('logout-btn');    // ← new
 const authModal  = document.getElementById('auth-modal');
 const closeAuth  = document.getElementById('close-auth');
-const authForm   = document.getElementById('auth-form');
+// Tab switching
+const tabLogin   = document.getElementById("tab-login");
+const tabSignup  = document.getElementById("tab-signup");
+const loginForm  = document.getElementById("login-form");
+const signupForm = document.getElementById("signup-form");
+const authMsg    = document.getElementById("auth-msg");
+
+tabLogin.addEventListener("click", () => {
+  loginForm.classList.remove("hidden");
+  signupForm.classList.add("hidden");
+  tabLogin.classList.add("border-sky-500", "text-white");
+  tabSignup.classList.remove("border-sky-500");
+  tabSignup.classList.add("text-white/60");
+});
+
+tabSignup.addEventListener("click", () => {
+  signupForm.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+  tabSignup.classList.add("border-sky-500", "text-white");
+  tabLogin.classList.remove("border-sky-500");
+  tabLogin.classList.add("text-white/60");
+});
 
 // toggle login/logout button visibility based on token
 function updateAuthUI() {
@@ -34,16 +55,54 @@ logoutBtn.addEventListener('click', () => {
   menuPanel.classList.add('hidden');
 });
 
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const login    = document.getElementById('login-input').value.trim();
+  const password = document.getElementById('password-input').value;
+
+  try {
+    const resp = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password })
+    });
+    const text = await resp.text();
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Server error (${resp.status}): ${text}`);
+    }
+
+    if (!resp.ok) {
+      authMsg.textContent = `Login failed: ${data.detail || data.message || "Unknown error"}`;
+      return;
+    }
+
+    authMsg.textContent = '';
+    alert(`Logged in as: ${login}`);
+    if (data.access_token) {
+      localStorage.setItem('token', data.access_token);
+      updateAuthUI();
+    }
+    authModal.classList.add('hidden');
+
+  } catch (err) {
+    console.error(err);
+    authMsg.textContent = 'An error occurred: ' + err.message;
+  }
+});
+
 // close auth modal
 closeAuth.addEventListener('click', () => {
   authModal.classList.add('hidden');
 });
 
-// handle login/register form
-authForm.addEventListener('submit', async e => {
+signupForm.addEventListener('submit', async e => {
   e.preventDefault();
-  const login    = document.getElementById('login-input').value.trim();
-  const password = document.getElementById('password-input').value;
+  const login    = document.getElementById('signup-login').value.trim();
+  const password = document.getElementById('signup-password').value;
 
   try {
     const resp = await fetch('/register', {
@@ -61,20 +120,21 @@ authForm.addEventListener('submit', async e => {
     }
 
     if (!resp.ok) {
-      alert(`Registration failed: ${data.detail || data.message || "Unknown error"}`);
+      authMsg.textContent = `Registration failed: ${data.detail || data.message || "Unknown error"}`;
       return;
     }
 
+    authMsg.textContent = '';
     alert(`Success! Logged in as: ${login}`);
     if (data.access_token) {
       localStorage.setItem('token', data.access_token);
-      updateAuthUI();              // ← update UI on login
+      updateAuthUI();
     }
     authModal.classList.add('hidden');
 
   } catch (err) {
     console.error(err);
-    alert('An error occurred: ' + err.message);
+    authMsg.textContent = 'An error occurred: ' + err.message;
   }
 });
 
