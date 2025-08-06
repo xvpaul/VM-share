@@ -62,9 +62,10 @@ def start_websockify(vmid: str, port: int, vnc_unix_sock: str) -> subprocess.Pop
         for line in proc.stdout:
             line = line.strip()
             logging.info(f"[websockify:{vmid}] {line}")
-            if "Client closed connection" in line.lower():
+            if "client closed connection" in line.lower():
                 logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
                 cleanup_vm(vmid)
+                # Client connected
             elif "connecting to unix socket" in line.lower():
                 logging.info(f"[websockify:{vmid}] Client connected.")
 
