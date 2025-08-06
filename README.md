@@ -157,3 +157,4 @@ postgre setup:  CREATE USER adm_user WITH PASSWORD
                 postgres-# \q
 
 
+Things to learn added: threads and signals 
