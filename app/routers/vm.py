@@ -1,5 +1,8 @@
+#VM_share/app/routers/vm.py
 import secrets
 import subprocess
+import logging
+import os
 from pathlib import Path
 from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,8 +13,37 @@ from methods.manager.OverlayManager import QemuOverlayManager
 from methods.database.database import get_db
 from methods.auth.auth import Authentification, get_current_user
 from methods.database.models import User
-
 from utils import find_free_port, start_websockify
+import configs.log_config as logs
+
+
+"""
+Logging configuration 
+"""
+
+logging.basicConfig(
+    filename=logs.LOG_NAME,
+    level=logging.INFO,
+    format='%(asctime)s.%(msecs)05d %(message)s',
+    datefmt='%Y-%m-%d %H-%M-%S',
+)
+
+try:
+    log_dir = os.path.dirname(logs.LOG_DIR)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    with open(logs.LOG_DIR, 'a'):
+        pass
+
+except Exception as e:
+    print(f'Error: {e}')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs) %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
+    logging.error(f"Failed to initialize file logging: {e}")
+
 
 router = APIRouter()
 SESSIONS: Dict[str, dict] = {}
@@ -23,16 +55,22 @@ async def run_vm_script(
     db: Session = Depends(get_db)
 ):
     try:
-        print("🚀 [run_vm_script] got user:", user)
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
 
+        logging.info(f"VM_share/app/routers/vm.py: [run_vm_script] Requested by user '{user.login}' (id={user_id})")
+        logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
+
         manager = QemuOverlayManager(user_id)
-        manager.create_overlay()
+        overlay_path = manager.create_overlay()
+        logging.info(f"VM_share/app/routers/vm.py: Overlay ready at {overlay_path}")
+
         meta = manager.boot_vm(vmid)
+        logging.info(f"VM_share/app/routers/vm.py: VM booted for user {user.login} (vmid={vmid})")
 
         port = find_free_port()
         proc = start_websockify(port, meta["vnc_socket"])
+        logging.info(f"VM_share/app/routers/vm.py: Websockify started on port {port} for VM {vmid}")
 
         SESSIONS[vmid] = {**meta, "http_port": port}
         WEBSOCKIFY_PROCS[vmid] = proc
@@ -44,16 +82,18 @@ async def run_vm_script(
             f"{novnc_proxy} --listen 0.0.0.0:6080 --vnc localhost:{port} --web {web_dir}",
             shell=True
         )
+        logging.info(f"VM_share/app/routers/vm.py: noVNC proxy started for VM {vmid} on port 6080")
 
-        return JSONResponse({
+        response = {
             "message": f"VM for user {user.login} launched (vmid={vmid})",
             "vm": meta,
             "redirect": f"http://{server_config.SERVER_HOST}:6080/vnc.html?host={server_config.SERVER_HOST}&port={port}"
-        })
+        }
+        logging.info(f"VM_share/app/routers/vm.py: VM launch complete: {response['message']}")
+
+        return JSONResponse(response)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception(f"VM_share/app/routers/vm.py: Failed to launch VM for user {user.login} (id={user.id}): {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     

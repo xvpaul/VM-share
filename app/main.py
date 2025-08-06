@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from routers.root import router as root_router
@@ -5,7 +6,6 @@ from routers.vm   import router as vm_router
 from routers.auth import router as auth_router
 
 app = FastAPI()
-# main.py, right after app = FastAPI()
 for route in app.routes:
     print(f"{route.name:30} → {route.path}  {route.methods}")
 
