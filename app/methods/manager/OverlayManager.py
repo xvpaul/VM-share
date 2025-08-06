@@ -42,18 +42,19 @@ class QemuOverlayManager:
     """
     Manages a user's qcow2 overlay and a headless QEMU instance with VNC+QMP on UNIX sockets.
     """
-    def __init__(self, user_id: str):
+    def __init__(self, user_id: str, vmid: str):
         self.base_image = Path(configs.ALPINE_IMAGE_PATH)
         self.overlay_dir = Path(configs.ALPINE_OVERLAYS_DIR)
         # self.overlay_dir.mkdir(parents=True, exist_ok=True) <-- of no use anymore 
         self.user_id = user_id
+        self.vmid = vmid
 
-    def overlay_path(self, vmid) -> Path:
-        return self.overlay_dir / f"alpine_{vmid}.qcow2"
+    def overlay_path(self) -> Path:
+        return self.overlay_dir / f"alpine_{self.vmid}.qcow2"
 
-    def create_overlay(self, vmid) -> Path:
+    def create_overlay(self) -> Path:
         try:
-            overlay = self.overlay_path(vmid)
+            overlay = self.overlay_path()
             if overlay.exists():
                 logging.info(f"VM_share/app/methods/OverlayManager.py: Overlay already exists for user {self.user_id}: {overlay}")
                 return overlay
