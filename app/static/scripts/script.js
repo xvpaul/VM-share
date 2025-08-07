@@ -1,48 +1,100 @@
-// Open and close auth modal
-document.getElementById("auth-btn")?.addEventListener("click", () => {
-  document.getElementById("auth-modal").classList.remove("hidden");
-});
-document.getElementById("close-auth")?.addEventListener("click", () => {
-  document.getElementById("auth-modal").classList.add("hidden");
-});
+// =====================
+// Auth Modal Handling
+// =====================
+const authBtn = document.getElementById("auth-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authModal = document.getElementById("auth-modal");
+const closeAuth = document.getElementById("close-auth");
 
-// Tab switching logic
 const tabLogin = document.getElementById("tab-login");
 const tabSignup = document.getElementById("tab-signup");
 const loginForm = document.getElementById("login-form");
 const signupForm = document.getElementById("signup-form");
-
-tabLogin?.addEventListener("click", () => {
-  loginForm.classList.remove("hidden");
-  signupForm.classList.add("hidden");
-
-  tabLogin.classList.add("text-white", "border-b-2", "border-white");
-  tabLogin.classList.remove("text-white/60");
-
-  tabSignup.classList.remove("border-b-2", "border-white", "text-white");
-  tabSignup.classList.add("text-white/60");
-});
-
-tabSignup?.addEventListener("click", () => {
-  signupForm.classList.remove("hidden");
-  loginForm.classList.add("hidden");
-
-  tabSignup.classList.add("text-white", "border-b-2", "border-white");
-  tabSignup.classList.remove("text-white/60");
-
-  tabLogin.classList.remove("border-b-2", "border-white", "text-white");
-  tabLogin.classList.add("text-white/60");
-});
-
+const authMsg = document.getElementById("auth-msg");
 
 const alpineBtn = document.getElementById("alpine-btn");
 const debianBtn = document.getElementById("debian-btn");
 
+// Toggle modal
+authBtn.addEventListener("click", () => {
+  authModal.classList.remove("hidden");
+});
+closeAuth.addEventListener("click", () => {
+  authModal.classList.add("hidden");
+});
+
+// Switch tabs
+tabLogin.addEventListener("click", () => {
+  tabLogin.classList.add("border-b-2", "border-white");
+  tabSignup.classList.remove("border-b-2", "border-white");
+  loginForm.classList.remove("hidden");
+  signupForm.classList.add("hidden");
+});
+tabSignup.addEventListener("click", () => {
+  tabSignup.classList.add("border-b-2", "border-white");
+  tabLogin.classList.remove("border-b-2", "border-white");
+  signupForm.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+});
+
+// =====================
+// Auth Functions
+// =====================
+async function registerOrLogin(url, login, password) {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Authentication failed");
+
+    // Save token
+    localStorage.setItem("access_token", data.access_token);
+    authMsg.textContent = "";
+    authModal.classList.add("hidden");
+    authBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
+    console.log(`Logged in as ${login}`);
+  } catch (err) {
+    authMsg.textContent = err.message;
+    console.error("Auth error:", err);
+  }
+}
+
+// Login form submit
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const login = loginForm.querySelector("input[placeholder='Email']").value;
+  const password = loginForm.querySelector("input[placeholder='Password']").value;
+  await registerOrLogin("/token", login, password);
+});
+
+// Signup form submit
+signupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const login = signupForm.querySelector("input[placeholder='Email']").value;
+  const password = signupForm.querySelector("input[placeholder='Password']").value;
+  await registerOrLogin("/register", login, password);
+});
+
+// Logout
+logoutBtn.addEventListener("click", () => {
+  localStorage.removeItem("access_token");
+  logoutBtn.classList.add("hidden");
+  authBtn.classList.remove("hidden");
+});
+
+// =====================
+// VM Launch
+// =====================
 async function runVM(os_type) {
   try {
     const token = localStorage.getItem("access_token");
     if (!token) {
-      alert("You must be logged in to launch a VM.");
+      alert("Please log in first.");
       return;
     }
 
@@ -55,21 +107,17 @@ async function runVM(os_type) {
       body: JSON.stringify({ os_type }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "VM launch failed");
-    }
-
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "VM launch failed");
+
     if (data.redirect) {
       window.location.href = data.redirect;
     } else {
-      alert("VM started but no redirect URL received.");
+      alert("VM started but no redirect URL was provided.");
     }
-
   } catch (err) {
-    console.error("Error launching VM:", err);
-    alert("Error launching VM: " + err.message);
+    console.error("VM launch error:", err);
+    alert(err.message);
   }
 }
 
