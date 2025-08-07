@@ -98,7 +98,7 @@ async function runVM(os_type) {
       return;
     }
 
-    const res = await fetch("/run-script", {
+    const res = await fetch("api/run-script", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
