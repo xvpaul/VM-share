@@ -4,6 +4,7 @@ import subprocess
 import logging
 import os
 from pathlib import Path
+from pydantic import BaseModel
 from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -46,14 +47,19 @@ router = APIRouter()
 SESSIONS: Dict[str, dict] = {}
 WEBSOCKIFY_PROCS: Dict[str, subprocess.Popen] = {}
 
+class RunScriptRequest(BaseModel):
+    os_type: str
+
 @router.post("/run-script")
 async def run_vm_script(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: RunScriptRequest,
 ):
     try:
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
+        os_type = request.os_type
         for existing_vmid, session in SESSIONS.items():
             if session[vmid] == user_id:
                 logging.info(f"User {user_id} already has VM {existing_vmid}, returning existing session")
@@ -66,7 +72,7 @@ async def run_vm_script(
         logging.info(f"VM_share/app/routers/vm.py: [run_vm_script] Requested by user '{user.login}' (id={user_id})")
         logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
 
-        manager = QemuOverlayManager(user_id, vmid)
+        manager = QemuOverlayManager(user_id, vmid, os_type)
         overlay_path = manager.create_overlay()
         logging.info(f"VM_share/app/routers/vm.py: Overlay ready at {overlay_path}")
 
@@ -77,7 +83,7 @@ async def run_vm_script(
         proc = start_websockify(vmid, port, meta["vnc_socket"], SESSIONS)
         logging.info(f"VM_share/app/routers/vm.py: Websockify started on port {port} for VM {vmid}")
 
-        SESSIONS[vmid] = {**meta, "http_port": port}
+        SESSIONS[vmid] = {**meta, "http_port": port, "os_type": os_type}
         WEBSOCKIFY_PROCS[vmid] = proc
 
         web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()

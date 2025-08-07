@@ -2,8 +2,12 @@ import socket
 import subprocess
 import logging
 import os
+import configs.vm_profiles as vm_profiles
 from threading import Thread
 from pathlib import Path
+
+
+RUN_DIR = Path("/tmp/qemu")
 
 def find_free_port() -> int:
     """Return an available TCP port on localhost."""
@@ -13,33 +17,50 @@ def find_free_port() -> int:
     
 def cleanup_vm(vmid: str, sessions: dict):
     """
-    Cleans up QEMU VM processes and overlay file for a given VM ID and user ID.
+    Cleans up QEMU VM processes, sockets, and overlay file for a given VM ID.
     """
-    overlay_path = f"/root/myapp/overlays/Alpine_Linux/alpine_{vmid}.qcow2"
-
     try:
-        sessions.pop(vmid)
-        logging.info(f"[cleanup_vm] removing session {vmid} from SESSIONS")
-        subprocess.run(
-            ["pkill", "-f", overlay_path],
-            check=False
-        )
+        session = sessions.pop(vmid, None)
+        if not session:
+            logging.warning(f"[cleanup_vm] No active session found for VM {vmid}")
+            return
+
+        user_id = session.get("user_id")
+        os_type = session.get("os_type")
+        if not os_type or os_type not in vm_profiles.VM_PROFILES:
+            logging.error(f"[cleanup_vm] Unknown or missing os_type '{os_type}' for VM {vmid}")
+            return
+
+        profile = vm_profiles.VM_PROFILES[os_type]
+        overlay_path = profile["overlay_dir"] / f"{profile['overlay_prefix']}_{vmid}.qcow2"
+
+        logging.info(f"[cleanup_vm] Cleaning up VM {vmid} for user {user_id} with OS type {os_type}")
+
+        # Kill QEMU process using overlay path
+        subprocess.run(["pkill", "-f", str(overlay_path)], check=False)
         logging.info(f"[cleanup_vm] Killed QEMU processes using {overlay_path}")
 
-        subprocess.run(
-            ["pkill", "-f", vmid],
-            check=False
-        )
+        # Kill websockify process containing vmid
+        subprocess.run(["pkill", "-f", vmid], check=False)
         logging.info(f"[cleanup_vm] Killed Websockify processes containing {vmid}")
 
-        if os.path.exists(overlay_path):
-            os.remove(overlay_path)
+        # Delete overlay file
+        if overlay_path.exists():
+            overlay_path.unlink()
             logging.info(f"[cleanup_vm] Deleted overlay file {overlay_path}")
         else:
             logging.warning(f"[cleanup_vm] Overlay file not found: {overlay_path}")
 
+        # Remove leftover UNIX sockets
+        vnc_sock = RUN_DIR / f"vnc-{vmid}.sock"
+        qmp_sock = RUN_DIR / f"qmp-{vmid}.sock"
+        for sock in (vnc_sock, qmp_sock):
+            if sock.exists():
+                sock.unlink()
+                logging.info(f"[cleanup_vm] Removed socket: {sock}")
+
     except Exception as e:
-        logging.error(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
+        logging.exception(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
 
     
 def start_websockify(vmid: str, port: int, vnc_unix_sock: str, sessions: dict) -> subprocess.Popen:
