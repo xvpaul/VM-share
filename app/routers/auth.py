@@ -2,6 +2,8 @@
 import logging
 import os
 import configs.log_config as logs
+from methods.database.models import EmailToken
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -32,7 +34,6 @@ except Exception as e:
         datefmt='%Y-%m-%d %H-%M-%S',
     )
     logging.error(f"Failed to initialize file logging: {e}")
-
 
 
 router = APIRouter()
@@ -103,3 +104,32 @@ def login_token(
     except Exception as e:
         logging.exception(f"VM_share/app/routers/auth.py: Login error for user '{form_data.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/verify-email")
+async def verify_email(token: str, db: Session = Depends(get_db)):
+    logging.info(f"Received email verification request with token: {token}")
+    
+    token_entry = db.query(EmailToken).filter_by(token=token).first()
+    if not token_entry:
+        logging.warning(f"Verification failed: Token not found: {token}")
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    if token_entry.used:
+        logging.warning(f"Verification failed: Token already used: {token}")
+        raise HTTPException(status_code=400, detail="Token already used")
+
+    if token_entry.expires_at < datetime.utcnow():
+        logging.warning(f"Verification failed: Token expired: {token}")
+        raise HTTPException(status_code=400, detail="Token expired")
+
+    user = db.query(User).filter_by(id=token_entry.user_id).first()
+    if not user:
+        logging.error(f"Verification failed: No user found for token: {token}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_verified = True
+    token_entry.used = True
+    db.commit()
+
+    logging.info(f"User '{user.login}' (ID: {user.id}) verified successfully via token.")
+    return {"message": "Email verified successfully. You may now log in."}

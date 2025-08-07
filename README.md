@@ -157,7 +157,8 @@ postgre setup:  CREATE USER adm_user WITH PASSWORD
                 postgres-# \q
 
 
-Things to learn added: threads and signals 
+Things to learn added: threads and signals, Creates a session factory. Each session is a connection to the DB in db context, Enforces relational links between tables (used in EmailToken)
+
 
 ps aux | grep qemu
 ps aux | grep vnc-dd7df11ce297.sock
@@ -174,6 +175,9 @@ psql to enter into postgre interactive terminal
 \l i use to get all my dbs
 \c to connect to db
 \dt to get tables
+psql -U postgres
+DROP DATABASE auth_db;
+CREATE DATABASE auth_db;
 
 
 

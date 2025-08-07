@@ -1,3 +1,4 @@
+#utils.py
 import socket
 import subprocess
 import logging
@@ -13,33 +14,33 @@ def find_free_port() -> int:
     
 def cleanup_vm(vmid: str, sessions: dict):
     """
-    Cleans up QEMU VM processes and overlay file for a given VM ID and user ID.
+    Cleans up QEMU VM processes and overlay file for a given VM ID.
     """
     overlay_path = f"/root/myapp/overlays/Alpine_Linux/alpine_{vmid}.qcow2"
 
     try:
         sessions.pop(vmid)
-        logging.info(f"[cleanup_vm] removing session {vmid} from SESSIONS")
+        logging.info(f"utils.py: [cleanup_vm] removing session {vmid} from SESSIONS")
         subprocess.run(
             ["pkill", "-f", overlay_path],
             check=False
         )
-        logging.info(f"[cleanup_vm] Killed QEMU processes using {overlay_path}")
+        logging.info(f"utils.py: [cleanup_vm] Killed QEMU processes using {overlay_path}")
 
         subprocess.run(
             ["pkill", "-f", vmid],
             check=False
         )
-        logging.info(f"[cleanup_vm] Killed Websockify processes containing {vmid}")
+        logging.info(f"utils.py: [cleanup_vm] Killed Websockify processes containing {vmid}")
 
         if os.path.exists(overlay_path):
             os.remove(overlay_path)
-            logging.info(f"[cleanup_vm] Deleted overlay file {overlay_path}")
+            logging.info(f"utils.py: [cleanup_vm] Deleted overlay file {overlay_path}")
         else:
-            logging.warning(f"[cleanup_vm] Overlay file not found: {overlay_path}")
+            logging.warning(f"utils.py: [cleanup_vm] Overlay file not found: {overlay_path}")
 
     except Exception as e:
-        logging.error(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
+        logging.error(f"utils.py: [cleanup_vm] Error while cleaning up VM {vmid}: {e}")
 
     
 def start_websockify(vmid: str, port: int, vnc_unix_sock: str, sessions: dict) -> subprocess.Popen:
@@ -63,13 +64,13 @@ def start_websockify(vmid: str, port: int, vnc_unix_sock: str, sessions: dict) -
     def monitor_output():
         for line in proc.stdout:
             line = line.strip()
-            logging.info(f"[websockify:{vmid}] {line}")
+            logging.info(f"utils.py: [websockify:{vmid}] {line}")
             if "client closed connection" in line.lower():
-                logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
+                logging.info(f"utils.py: [websockify:{vmid}] Client disconnected. Clean-up starts.")
                 cleanup_vm(vmid, sessions)
                 # Client connected
             elif "connecting to unix socket" in line.lower():
-                logging.info(f"[websockify:{vmid}] Client connected.")
+                logging.info(f"utils.py: [websockify:{vmid}] Client connected.")
 
     Thread(target=monitor_output, daemon=True).start()
 
