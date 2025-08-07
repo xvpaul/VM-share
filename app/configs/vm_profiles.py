@@ -5,7 +5,7 @@ VM_PROFILES = {
     "alpine": {
         "overlay_dir": Path("/root/myapp/overlays/Alpine_Linux"),
         "overlay_prefix": "alpine",
-        "base_image": Path("/root/myapp/images/alpine_base.qcow2"),
+        "base_image": Path("/root/myapp/base_images/alpine.qcow2"),
         "default_memory": 1024,
     },
     "debian": {
