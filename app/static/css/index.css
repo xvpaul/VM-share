@@ -1,40 +1,45 @@
-/* Decorative floating circles */
-.float-slow   { animation: float 12s ease-in-out infinite; }
-.float-slower { animation: float 16s ease-in-out infinite; }
-.float-slowest{ animation: float 20s ease-in-out infinite; }
-
-@keyframes float {
-  0%   { transform: translateY(0) translateX(0) scale(1); }
-  50%  { transform: translateY(-16px) translateX(8px) scale(1.03); }
-  100% { transform: translateY(0) translateX(0) scale(1); }
+body {
+  font-family: 'Inter', sans-serif;
 }
 
-/* Smooth hue transitions */
-#bg-hue-layer {
-  transition: filter 80ms linear;
+svg {
+  fill: currentColor;
 }
 
-/* define the hue-rotate animation */
-@keyframes hueShift {
-  from { filter: hue-rotate(0deg); }
-  to   { filter: hue-rotate(360deg); }
+.input {
+  padding: 0.5rem 1rem;
+  background-color: #1a1a1a;
+  color: white;
+  border-radius: 0.375rem;
 }
 
-/* always have the animation ready, but paused by default */
-#bg-hue-layer {
-  /* full cycle every 4s */
-  animation: hueShift 4s linear infinite;
-  /* start paused so it stays at whatever frame it has */
-  animation-play-state: paused;
-  /* when you unhover, fade back to 0° over 0.3s */
-  transition: filter 0.3s ease-out;
-  /* ensure base state */
-  filter: hue-rotate(0deg);
+.submit-btn {
+  background-color: white;
+  color: black;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  transition: background 0.3s;
+}
+.submit-btn:hover {
+  background-color: #e5e5e5;
 }
 
-/* on hover, run the animation and disable the transition */
-body:hover #bg-hue-layer {
-  animation-play-state: running;
-  /* turning off the transition avoids conflict with the running animation */
-  transition: none;
+.vm-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: black;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border 0.3s;
+  width: 280px;
+  justify-content: center;
+}
+.vm-btn:hover {
+  border-color: rgba(255, 255, 255, 0.6);
 }
