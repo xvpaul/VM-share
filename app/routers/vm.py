@@ -52,9 +52,9 @@ class RunScriptRequest(BaseModel):
 
 @router.post("/run-script")
 async def run_vm_script(
+    request: RunScriptRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    request: RunScriptRequest,
 ):
     try:
         user_id = str(user.id)
