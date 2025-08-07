@@ -55,13 +55,14 @@ async def run_vm_script(
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
         for existing_vmid, session in SESSIONS.items():
-            if session["user_id"] == user_id:
+            if session[vmid] == user_id:
                 logging.info(f"User {user_id} already has VM {existing_vmid}, returning existing session")
                 return JSONResponse({
                     "message": f"VM already running for user {user.login}",
                     "vm": session,
                     "redirect": f"http://{server_config.SERVER_HOST}:6080/vnc.html?host={server_config.SERVER_HOST}&port={session['http_port']}"
                 })
+            
         logging.info(f"VM_share/app/routers/vm.py: [run_vm_script] Requested by user '{user.login}' (id={user_id})")
         logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
 
@@ -73,7 +74,7 @@ async def run_vm_script(
         logging.info(f"VM_share/app/routers/vm.py: VM booted for user {user.login} (vmid={vmid})")
 
         port = find_free_port()
-        proc = start_websockify(vmid, port, meta["vnc_socket"])
+        proc = start_websockify(vmid, port, meta["vnc_socket"], SESSIONS)
         logging.info(f"VM_share/app/routers/vm.py: Websockify started on port {port} for VM {vmid}")
 
         SESSIONS[vmid] = {**meta, "http_port": port}

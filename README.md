@@ -163,3 +163,18 @@ ps aux | grep qemu
 ps aux | grep vnc-dd7df11ce297.sock
 find /tmp/qemu/ -type s
 lsof | grep /tmp/qemu/
+
+sudo -i -u postgres
+all db --> \l
+
+in postgre i must do the following  
+sudo -i -u postgres to switch me to postgre user account
+then
+psql to enter into postgre interactive terminal
+\l i use to get all my dbs
+\c to connect to db
+\dt to get tables
+
+
+
+Bug log: disconnect on duplicate tab leads to sisconnect on all tabs for a user, prop solution: use cookies

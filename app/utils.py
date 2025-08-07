@@ -11,13 +11,14 @@ def find_free_port() -> int:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
     
-def cleanup_vm(vmid: str):
+def cleanup_vm(vmid: str, sessions: dict):
     """
     Cleans up QEMU VM processes and overlay file for a given VM ID and user ID.
     """
     overlay_path = f"/root/myapp/overlays/Alpine_Linux/alpine_{vmid}.qcow2"
 
     try:
+        sessions.pop(vmid)
         subprocess.run(
             ["pkill", "-f", overlay_path],
             check=False
@@ -40,7 +41,7 @@ def cleanup_vm(vmid: str):
         logging.error(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
 
     
-def start_websockify(vmid: str, port: int, vnc_unix_sock: str) -> subprocess.Popen:
+def start_websockify(vmid: str, port: int, vnc_unix_sock: str, sessions: dict) -> subprocess.Popen:
     static_dir = Path(__file__).parent / "static"
 
     cmd = [
@@ -64,7 +65,7 @@ def start_websockify(vmid: str, port: int, vnc_unix_sock: str) -> subprocess.Pop
             logging.info(f"[websockify:{vmid}] {line}")
             if "client closed connection" in line.lower():
                 logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
-                cleanup_vm(vmid)
+                cleanup_vm(vmid, sessions)
                 # Client connected
             elif "connecting to unix socket" in line.lower():
                 logging.info(f"[websockify:{vmid}] Client connected.")
