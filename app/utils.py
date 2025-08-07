@@ -19,6 +19,7 @@ def cleanup_vm(vmid: str, sessions: dict):
 
     try:
         sessions.pop(vmid)
+        logging.info(f"[cleanup_vm] removing session {vmid} from SESSIONS")
         subprocess.run(
             ["pkill", "-f", overlay_path],
             check=False
