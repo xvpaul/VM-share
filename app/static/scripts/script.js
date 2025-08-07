@@ -122,4 +122,4 @@ async function runVM(os_type) {
 }
 
 alpineBtn.addEventListener("click", () => runVM("alpine"));
-debianBtn.addEventListener("click", () => runVM("bodhi"));
+debianBtn.addEventListener("click", () => runVM("tiny"));
