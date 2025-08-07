@@ -8,6 +8,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from methods.database.database import get_db
 from methods.database.models import User
+from pydantic import BaseModel
+
+class LoginJSON(BaseModel):
+    username: str
+    password: str
 
 """
 Logging configuration 
@@ -83,23 +88,16 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         logging.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{body.get('login', 'unknown')}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/token")
-def login_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
+@router.post("/token-json")
+def login_token_json(payload: LoginJSON, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
-        auth = Authentification(form_data.username, form_data.password)
+        auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
-            logging.warning(f"VM_share/app/routers/auth.py: Token login failed: Invalid credentials for '{form_data.username}'")
             raise HTTPException(status_code=401, detail="Invalid credentials")
-
         token = auth.create_access_token({"sub": user.login})
-        logging.info(f"VM_share/app/routers/auth.py: User '{user.login}' authenticated via /token")
         return {"access_token": token, "token_type": "bearer"}
-
     except Exception as e:
-        logging.exception(f"VM_share/app/routers/auth.py: Login error for user '{form_data.username}': {e}")
+        logging.exception("Login error: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
