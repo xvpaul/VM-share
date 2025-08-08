@@ -111,6 +111,22 @@ async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
         logging.exception(f"VM_share/app/routers/auth.py: Exception during login for user '{payload.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@router.post("/token")
+def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
+    from methods.auth.auth import Authentification
+    try:
+        auth = Authentification(payload.username, payload.password)
+        user = auth.authenticate_user(db)
+        if not user:
+            logging.warning(f"VM_share/app/routers/auth.py: Login failed for user '{payload.username}' via /token")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        token = auth.create_access_token({"sub": user.login})
+        logging.info(f"VM_share/app/routers/auth.py: User '{user.login}' logged in via /token")
+        return {"access_token": token, "token_type": "bearer"}
+    except Exception as e:
+        logging.exception("Login error via /token: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/token-json")
 def login_token_json(payload: LoginJSON, db: Session = Depends(get_db)):
