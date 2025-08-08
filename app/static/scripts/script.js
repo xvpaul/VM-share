@@ -1,6 +1,8 @@
 // =====================
 // Auth Modal Handling
 // =====================
+document.addEventListener("DOMContentLoaded", () => {
+
 const authBtn = document.getElementById("auth-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const authModal = document.getElementById("auth-modal");
@@ -42,14 +44,15 @@ tabSignup.addEventListener("click", () => {
 // =====================
 async function registerOrLogin(url, login, password) {
   try {
-    const payload = url === "/token"
-      ? { username: login, password }  // expected by /token
-      : { login, password };           // expected by /register
+    const payload =
+      url === "/token"
+        ? { username: login, password }  // what /token expects
+        : { login, password };           // what /register expects
 
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
@@ -127,3 +130,4 @@ async function runVM(os_type) {
 
 alpineBtn.addEventListener("click", () => runVM("alpine"));
 debianBtn.addEventListener("click", () => runVM("tiny"));
+});
