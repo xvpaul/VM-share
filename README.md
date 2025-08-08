@@ -178,3 +178,16 @@ psql to enter into postgre interactive terminal
 
 
 Bug log: disconnect on duplicate tab leads to sisconnect on all tabs for a user, prop solution: use cookies
+
+
+
+
+qemu-system-x86_64 \
+  -m 1024 \
+  -cdrom /root/myapp/iso/CorePlus-current.iso \
+  -drive file=/root/myapp/base_images/Tiny/tinycore.qcow2,format=qcow2,if=virtio \
+  -boot d \
+  -vga std \
+  -vnc :1 \
+  -display none \
+  -net nic -net user
