@@ -15,7 +15,7 @@ const signupForm = document.getElementById("signup-form");
 const authMsg = document.getElementById("auth-msg");
 
 const alpineBtn = document.getElementById("alpine-btn");
-const debianBtn = document.getElementById("debian-btn");
+const debianBtn = document.getElementById("tinycore-btn");
 
 // Toggle modal
 authBtn.addEventListener("click", () => {
@@ -129,5 +129,5 @@ async function runVM(os_type) {
 }
 
 alpineBtn.addEventListener("click", () => runVM("alpine"));
-debianBtn.addEventListener("click", () => runVM("tiny"));
+tinyBtn.addEventListener("click", () => runVM("tiny"));
 });
