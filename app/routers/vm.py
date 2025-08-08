@@ -58,7 +58,6 @@ async def run_vm_script(
 ):
     try:
         user_id = str(user.id)
-        vmid = secrets.token_hex(6)  # Generate a new VM ID for the session
         os_type = request.os_type
 
         # Look for an existing session for this user_id
@@ -70,10 +69,14 @@ async def run_vm_script(
                     "vm": session,
                     "redirect": f"http://{server_config.SERVER_HOST}:6080/vnc.html?host={server_config.SERVER_HOST}&port={session['http_port']}"
                 })
-            
+        
+        # Generate a new VM ID only after confirming there's no existing session for this user
+        vmid = secrets.token_hex(6)  # Generate a new VM ID for the session
+
         logging.info(f"VM_share/app/routers/vm.py: [run_vm_script] Requested by user '{user.login}' (id={user_id})")
         logging.info(f"VM_share/app/routers/vm.py: Generated VMID: {vmid}")
 
+        # Proceed to create VM overlay, boot the VM, etc.
         manager = QemuOverlayManager(user_id, vmid, os_type)
         overlay_path = manager.create_overlay()
         logging.info(f"VM_share/app/routers/vm.py: Overlay ready at {overlay_path}")
@@ -85,7 +88,7 @@ async def run_vm_script(
         proc = start_websockify(vmid, port, meta["vnc_socket"], SESSIONS)
         logging.info(f"VM_share/app/routers/vm.py: Websockify started on port {port} for VM {vmid}")
 
-        SESSIONS[vmid] = {**meta, "http_port": port, "os_type": os_type}
+        SESSIONS[vmid] = {**meta, "http_port": port, "os_type": os_type, "user_id": user_id}
         WEBSOCKIFY_PROCS[vmid] = proc
 
         web_dir = (Path(__file__).parent.parent / "static" / "novnc-ui").resolve()
@@ -109,4 +112,3 @@ async def run_vm_script(
     except Exception as e:
         logging.exception(f"VM_share/app/routers/vm.py: Failed to launch VM for user {user.login} (id={user.id}): {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
