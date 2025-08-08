@@ -42,16 +42,19 @@ tabSignup.addEventListener("click", () => {
 // =====================
 async function registerOrLogin(url, login, password) {
   try {
+    const payload = url === "/token"
+      ? { username: login, password }  // expected by /token
+      : { login, password };           // expected by /register
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login, password })
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Authentication failed");
 
-    // Save token
     localStorage.setItem("access_token", data.access_token);
     authMsg.textContent = "";
     authModal.classList.add("hidden");
@@ -63,6 +66,7 @@ async function registerOrLogin(url, login, password) {
     console.error("Auth error:", err);
   }
 }
+
 
 // Login form submit
 loginForm.addEventListener("submit", async (e) => {
