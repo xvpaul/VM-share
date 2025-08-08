@@ -15,7 +15,7 @@ const signupForm = document.getElementById("signup-form");
 const authMsg = document.getElementById("auth-msg");
 
 const alpineBtn = document.getElementById("alpine-btn");
-const debianBtn = document.getElementById("tinycore-btn");
+const tinyBtn = document.getElementById("tinycore-btn");
 
 // Toggle modal
 authBtn.addEventListener("click", () => {
