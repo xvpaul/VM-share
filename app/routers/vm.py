@@ -61,7 +61,7 @@ async def run_vm_script(
         vmid = secrets.token_hex(6)
         os_type = request.os_type
         for existing_vmid, session in SESSIONS.items():
-            if session[existing_vmid] == user_id:
+            if session.get('user_id') == user_id:
                 logging.info(f"User {user_id} already has VM {existing_vmid}, returning existing session")
                 return JSONResponse({
                     "message": f"VM already running for user {user.login}",
