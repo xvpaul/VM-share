@@ -11,7 +11,7 @@ VM_PROFILES = {
     "tiny": {
         "overlay_dir": Path("/root/myapp/overlays/Tiny"),
         "overlay_prefix": "tiny",
-        "base_image": Path("/root/myapp/base_images/Tiny/tinycore_base.qcow2"),
+        "base_image": Path("/root/myapp/base_images/Tiny/tinycore.qcow2"),
         "default_memory": 1024,
     },
 }
