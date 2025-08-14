@@ -1,193 +1,40 @@
-# VM_share
-uvicorn main:app --reload
-new run: uvicorn main:app --reload --host 0.0.0.0 --port 8000
-Installation: qemu-img create -f qcow2 alpine_disk.qcow2 2G
+# VM Access Platform  
+_Remote VM Management in the Browser_  
 
-qemu-system-x86_64 \
-  -m 512 \
-  -cdrom alpine-standard-latest-x86_64.iso \
-  -drive file=alpine_disk.qcow2,format=qcow2,if=virtio \
-  -boot d \
-  -net nic -net user \
-  -nographic
+---
 
-Booting overlay: qemu-system-x86_64 \
-  -m 512 \
-  -drive file=alpine_disk.qcow2,format=qcow2,if=virtio \
-  -net nic -net user \
-  -nographic
+## 📌 Overview  
+The **VM Access Platform** allows users to launch and interact with **fully operable virtual machines directly in their web browser**.  
+No local installation is required — just open the app, log in, and start using your VM through a **noVNC-powered graphical desktop**. You can run any operating system supported by QEMU and noVNC, though the available choices on [vmsl.ru](https://vmsl.ru) are currently limited by the hosting server’s hardware and configuration.
 
+**Built for**:
+- Safe sandboxing and experimentation with Linux distributions  
+- Quick access to Linux environments for OS-specific tasks  
 
-To-do:
-1)  Run-out of ports.
-    Proposed solutions: Port pool tracking
-                        Unix sockets
-                        Reverse proxy on 1 port
-    Chosen solution: QEMU + Unix socket + websockify - fucking shit, unix sockets are made by retarded faggot freaks
-2)  Run several machines simultaneously on a same port.
-        Script:  qemu-system-x86_64 \
-                -m 512 \
-                -drive file="/Users/soledaco/Desktop/pet/alpine.qcow2",format=qcow2,if=virtio \
-                -vnc :i
+---
 
-                ~/noVNC/utils/novnc_proxy --listen localhost:6086 --vnc localhost:5900 + i
+## ✨ Features  
+- **Fully Operable Remote VMs** – Run Debian, Ubuntu, or other distros with GUI support.  
+- **Browser-Based GUI Access** – Real-time VM desktop via **noVNC** (including opening a terminal emulator inside the VM’s GUI).  
+- **Custom Authentication** – Planned email-based sign-up & login for enhanced security.  
+- **Scalable Architecture** – Tested with up to 100 simultaneous active users (to-do, hope it's gonna workout).  
+- **Light/Dark Theme Toggle** – Comfortable, customizable user interface (to-do actually).  
 
+---
 
-3)  Isolate machines one from each other:
+## 🛠 Tech Stack  
+**Backend:** [FastAPI](https://fastapi.tiangolo.com/), [Unix sockets](https://www.baeldung.com/linux/unix-socket), [Websockify](https://github.com/novnc/websockify)  
+**Frontend:** HTML, [Tailwind CSS](https://tailwindcss.com/), JavaScript  
+**Virtualization:** [QEMU](https://www.qemu.org/) (KVM optional), [noVNC](https://novnc.com/)  
+**Database:** [PostgreSQL](https://www.postgresql.org/)  
 
+---
 
-Notes:
-1)  Added noVNC pack to static since custom novnc page did not display as expected returning 404 when trying to get access to virtual machine on alpine linux
-2)  This what i entered in a db console:  soledaco=# create database auth_db;
-                                          CREATE DATABASE
-                                          soledaco=# create user adm_user with password 111
-                                          soledaco-# grant all privileges on database auth_db to adm_user
-                                          soledaco-# 
-adm_user pswd: 111
-
-
-
-pkill -9 qemu
-lsof -i :6080
-
-
-if my db users contains even one record vm will be created no matter what
-
-
-
-Useful commands:  tree  -  filesystem structure
-                  free -f - consumed memory
-                  df -h - space
-                  python3 -m http.server 8080 starts accessible by http://your-server-ip:8080 server
-                  curl ifconfig.me check my ipadress
-Structure:        .
-                  ├── VM_share
-                  │   ├── README.md
-                  │   └── app
-                  │       ├── configs
-                  │       │   ├── auth_config.py
-                  │       │   ├── db_config.py
-                  │       │   └── vm_config.py
-                  │       ├── main.py
-                  │       ├── methods
-                  │       │   ├── auth
-                  │       │   │   └── auth.py
-                  │       │   ├── database
-                  │       │   │   ├── database.py
-                  │       │   │   ├── init_db.py
-                  │       │   │   └── models.py
-                  │       │   └── manager
-                  │       │       └── OverlayManager.py
-                  │       ├── routers
-                  │       │   ├── auth.py
-                  │       │   ├── root.py
-                  │       │   └── vm.py
-                  │       ├── static
-                  │       │   ├── css
-                  │       │   │   └── index.css
-                  │       │   ├── index.html
-                  │       │   ├── novnc-ui
-                  │       │   │   ├── core
-                  │       │   │   └── vnc.html
-                  │       │   └── scripts
-                  │       │       └── index.js
-                  │       └── utils.py
-                  ├── base_images
-                  │   └── Alpine_Linux
-                  │       └── alpine.qcow2
-                  ├── iso
-                  │   └── alpine-standard-3.20.0-x86_64.iso
-                  ├── overlays
-                      └── Alpine_Linux
-
-
-                  24 directories, 65 files
-
-
-CD file on a server: nano /root/repos/VM_share.git/hooks/post-receive
-
-
-
-file content:
-#!/bin/bash
-exec > /tmp/git_deploy.log 2>&1
-echo "[HOOK] post-receive triggered successfully"
-
-# Where the code should be deployed
-TARGET_DIR="/root/myapp/VM_share"
-
-# Where the bare repo lives
-GIT_DIR="/root/repos/VM_share.git"
-
-echo "[INFO] Deploying to $TARGET_DIR..."
-
-# Checkout latest code into live folder
-git --work-tree="$TARGET_DIR" --git-dir="$GIT_DIR" checkout -f
-
-# Activate virtualenv and install dependencies
-if [ -f "/root/venv/bin/activate" ]; then
-    echo "[INFO] Installing dependencies from requirements.txt..."
-    source /root/venv/bin/activate
-    pip install -r "$TARGET_DIR/requirements.txt"
-fi
-
-# Restart the app if a restart script exists
-if [ -f "$TARGET_DIR/restart.sh" ]; then
-    echo "[INFO] Restarting the app..."
-    bash "$TARGET_DIR/restart.sh"
-fi
-
-echo "[INFO] Done."
-
-
-
-
-curl https://pastebin.com/raw/abcd1234 >> /root/.ssh/authorized_keys
-scp post-receive root@83.69.248.229:/root/repos/VM_share.git/hooks/
-pip3 freeze >> requirements.txt
-
-
-ssh root@83.69.248.229
-
-
-postgre setup:  CREATE USER adm_user WITH PASSWORD
-                postgres=# create database auth_db
-                postgres-# create user adm_user with password 111
-                postgres-# grant all privileges on database auth_db to adm_user
-                postgres-# \q
-
-
-Things to learn added: threads and signals 
-
-ps aux | grep qemu
-ps aux | grep vnc-dd7df11ce297.sock
-find /tmp/qemu/ -type s
-lsof | grep /tmp/qemu/
-
-sudo -i -u postgres
-all db --> \l
-
-in postgre i must do the following  
-sudo -i -u postgres to switch me to postgre user account
-then
-psql to enter into postgre interactive terminal
-\l i use to get all my dbs
-\c to connect to db
-\dt to get tables
-
-
-
-Bug log: disconnect on duplicate tab leads to sisconnect on all tabs for a user, prop solution: use cookies
-
-
-
-
-qemu-system-x86_64 \
-  -m 1024 \
-  -cdrom /root/myapp/iso/CorePlus-current.iso \
-  -drive file=/root/myapp/base_images/Tiny/tinycore.qcow2,format=qcow2,if=virtio \
-  -boot d \
-  -vga std \
-  -vnc :1 \
-  -display none \
-  -net nic -net user
+## 🏗 Architecture  
+```mermaid
+flowchart LR
+    User --> Browser
+    Browser --> FastAPI
+    FastAPI --> QEMU
+    QEMU --> noVNC
+    FastAPI --> PostgreSQL
