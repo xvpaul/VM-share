@@ -91,18 +91,13 @@ class Authentification:
 
 
 async def get_current_user(request: Request) -> User:
-    # Try header first (backward compatible)
-    token = None
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header[len("Bearer "):]
-
-    # Fallback: HttpOnly cookie (persist across refresh)
+    token = request.cookies.get("access_token")  # cookie first
     if not token:
-        token = request.cookies.get("access_token")
-
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer "):]
     if not token:
-        logging.warning("VM_share/app/methods/auth/auth.py: Authorization failed: no token in header or cookie")
+        logging.warning("Authorization failed: no token in header or cookie")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
     try:

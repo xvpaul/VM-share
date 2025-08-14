@@ -1,24 +1,26 @@
+// =====================
+// Auth Modal Handling
+// =====================
 document.addEventListener("DOMContentLoaded", () => {
-  const authBtn = document.getElementById("auth-btn");
+  const authBtn   = document.getElementById("auth-btn");
   const logoutBtn = document.getElementById("logout-btn");
   const authModal = document.getElementById("auth-modal");
   const closeAuth = document.getElementById("close-auth");
 
-  const tabLogin = document.getElementById("tab-login");
+  const tabLogin  = document.getElementById("tab-login");
   const tabSignup = document.getElementById("tab-signup");
   const loginForm = document.getElementById("login-form");
-  const signupForm = document.getElementById("signup-form");
-  const authMsg = document.getElementById("auth-msg");
+  const signupForm= document.getElementById("signup-form");
+  const authMsg   = document.getElementById("auth-msg");
 
   const alpineBtn = document.getElementById("alpine-btn");
-  const tinyBtn = document.getElementById("tinycore-btn");
+  const tinyBtn   = document.getElementById("tinycore-btn");
 
-  // --- NEW: initialize UI from cookie or localStorage ---
+  // --- INIT: determine UI from cookie session ---
   initAuthUI();
 
   async function initAuthUI() {
     try {
-      // Try cookie-based session first
       const r = await fetch("/me", { credentials: "include" });
       if (r.ok) {
         authBtn.classList.add("hidden");
@@ -26,15 +28,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
     } catch (_) {}
-    // Fallback: header token
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      authBtn.classList.add("hidden");
-      logoutBtn.classList.remove("hidden");
-    } else {
-      logoutBtn.classList.add("hidden");
-      authBtn.classList.remove("hidden");
-    }
+    // not authenticated
+    logoutBtn.classList.add("hidden");
+    authBtn.classList.remove("hidden");
   }
 
   // Toggle modal
@@ -43,45 +39,44 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Switch tabs
   tabLogin.addEventListener("click", () => {
-    tabLogin.classList.add("border-b-2", "border-white");
-    tabSignup.classList.remove("border-b-2", "border-white");
+    tabLogin.classList.add("border-b-2","border-white");
+    tabSignup.classList.remove("border-b-2","border-white");
     loginForm.classList.remove("hidden");
     signupForm.classList.add("hidden");
   });
   tabSignup.addEventListener("click", () => {
-    tabSignup.classList.add("border-b-2", "border-white");
-    tabLogin.classList.remove("border-b-2", "border-white");
+    tabSignup.classList.add("border-b-2","border-white");
+    tabLogin.classList.remove("border-b-2","border-white");
     signupForm.classList.remove("hidden");
     loginForm.classList.add("hidden");
   });
 
-  // Auth
+  // =====================
+  // Auth Functions (cookie-only)
+  // =====================
   async function registerOrLogin(url, login, password) {
     try {
       const payload = url === "/token" ? { username: login, password } : { login, password };
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",            // <— send/receive cookie
         body: JSON.stringify(payload),
-        credentials: "include", // <-- ensure cookie is stored
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Authentication failed");
-
-      // keep supporting header-based flows too (optional)
-      if (data.access_token) localStorage.setItem("access_token", data.access_token);
 
       authMsg.textContent = "";
       authModal.classList.add("hidden");
       authBtn.classList.add("hidden");
       logoutBtn.classList.remove("hidden");
-      console.log(`Logged in as ${login}`);
     } catch (err) {
       authMsg.textContent = err.message;
       console.error("Auth error:", err);
     }
   }
 
+  // Login form submit
   loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const login = loginForm.querySelector("input[placeholder='Email']").value;
@@ -89,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await registerOrLogin("/token", login, password);
   });
 
+  // Signup form submit
   signupForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const login = signupForm.querySelector("input[placeholder='Email']").value;
@@ -96,38 +92,28 @@ document.addEventListener("DOMContentLoaded", () => {
     await registerOrLogin("/register", login, password);
   });
 
-  // Logout clears cookie on server + localStorage
+  // Logout (server clears cookie)
   logoutBtn.addEventListener("click", async () => {
-    try {
-      await fetch("/auth/logout", { method: "POST", credentials: "include" });
-    } catch (_) {}
-    localStorage.removeItem("access_token");
+    try { await fetch("/logout", { method: "POST", credentials: "include" }); } catch (_){}
     logoutBtn.classList.add("hidden");
     authBtn.classList.remove("hidden");
   });
 
-  // VM launch — works with either cookie or header token
+  // =====================
+  // VM Launch (cookie-only)
+  // =====================
   async function runVM(os_type) {
     try {
-      const token = localStorage.getItem("access_token");
-      const headers = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
       const res = await fetch("api/run-script", {
         method: "POST",
-        headers,
-        credentials: "include", // <-- send cookie too if present
+        headers: { "Content-Type": "application/json" }, // no Authorization header
+        credentials: "include",                          // <— rely on cookie
         body: JSON.stringify({ os_type }),
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "VM launch failed");
-
-      if (data.redirect) {
-        window.location.href = data.redirect;
-      } else {
-        alert("VM started but no redirect URL was provided.");
-      }
+      if (data.redirect) window.location.href = data.redirect;
+      else alert("VM started but no redirect URL was provided.");
     } catch (err) {
       console.error("VM launch error:", err);
       alert(err.message);

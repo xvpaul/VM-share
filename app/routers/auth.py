@@ -15,6 +15,8 @@ class LoginJSON(BaseModel):
     username: str
     password: str
 
+COOKIE_MAX_AGE = 60*60*8  # 8h
+
 """
 Logging configuration 
 """
@@ -68,7 +70,7 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
                     key="access_token",
                     value=token,
                     httponly=True,
-                    secure=False,      # set False only for local http testing
+                    secure=False,      # <------ TRUE!!!!
                     samesite="lax",
                     path="/",
                     max_age=60*60*8,  
@@ -108,12 +110,16 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
     try:
+        logging.info(f"VM_share/app/routers/auth.py: /login attempt for user '{payload.username}'")
+
         auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
+            logging.warning(f"VM_share/app/routers/auth.py: /login failed for '{payload.username}' (invalid creds)")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         token = auth.create_access_token({"sub": user.login})
+        logging.info(f"VM_share/app/routers/auth.py: /login issued JWT for user '{user.login}' (id={user.id})")
 
         resp = JSONResponse({
             "message": "Login successful",
@@ -121,57 +127,102 @@ async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
             "access_token": token,
             "token_type": "bearer"
         })
-        resp.set_cookie(
-            key="access_token",
-            value=token,
-            httponly=True,
-            secure=False,   # True in prod (HTTPS)
-            samesite="lax",
-            path="/"
+
+        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
+        logging.info(
+            "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
+            "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
+            user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
         )
+
+        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
+        logging.info(f"VM_share/app/routers/auth.py: /login succeeded for '{user.login}' (cookie set)")
         return resp
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.exception(f"VM_share/app/routers/auth.py: Exception during login for user '{payload.username}': {e}")
+        logging.exception(f"VM_share/app/routers/auth.py: Exception during /login for user '{payload.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+def set_auth_cookie(resp: JSONResponse, token: str, *, dev_localhost: bool = True):
+    logging.info(
+        f"VM_share/app/routers/auth.py: Setting auth cookie "
+        f"(secure={not dev_localhost}, samesite='lax', max_age={COOKIE_MAX_AGE})"
+    )
+    resp.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=not dev_localhost,   # <----- SET TRUE!!!
+        samesite="lax",             # <----- NONE
+        path="/",
+        max_age=COOKIE_MAX_AGE,
+    )
 
 @router.post("/token")
 def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
+        logging.info(f"VM_share/app/routers/auth.py: /token login attempt for user '{payload.username}'")
+
         auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
-            logging.warning(f"VM_share/app/routers/auth.py: Login failed for user '{payload.username}' via /token")
+            logging.warning(f"VM_share/app/routers/auth.py: /token login failed for '{payload.username}' (invalid creds)")
             raise HTTPException(status_code=401, detail="Invalid username or password")
+
         token = auth.create_access_token({"sub": user.login})
-        logging.info(f"VM_share/app/routers/auth.py: User '{user.login}' logged in via /token")
-        return {"access_token": token, "token_type": "bearer"}
+        logging.info(f"VM_share/app/routers/auth.py: /token issued JWT for user '{user.login}' (id={user.id})")
+
+        resp = JSONResponse({"access_token": token, "token_type": "bearer", "id": user.id})
+
+        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
+        logging.info(
+            "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
+            "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
+            user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
+        )
+
+        set_auth_cookie(resp, token, dev_localhost=dev_localhost)  # FALSE FALSE FALSE!!!
+        logging.info(f"VM_share/app/routers/auth.py: /token login succeeded for '{user.login}' (cookie set)")
+        return resp
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.exception("Login error via /token: %s", e)
+        logging.exception(f"VM_share/app/routers/auth.py: Exception during /token for user '{payload.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/logout")
-async def logout_user(response: Response):
-    # remove cookie so the session ends
-    response = JSONResponse({"message": "Logged out"})
-    response.delete_cookie("access_token", path="/")
-    return response
-
-@router.post("/token-json")
-def login_token_json(payload: LoginJSON, db: Session = Depends(get_db)):
-    from methods.auth.auth import Authentification
-    try:
-        auth = Authentification(payload.username, payload.password)
-        user = auth.authenticate_user(db)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        token = auth.create_access_token({"sub": user.login})
-        return {"access_token": token, "token_type": "bearer"}
-    except Exception as e:
-        logging.exception("Login error: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+def logout_user():
+    logging.info("VM_share/app/routers/auth.py: Logging out user and deleting auth cookie")
+    resp = JSONResponse({"message": "Logged out"})
+    resp.delete_cookie("access_token", path="/")
+    return resp
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
+    logging.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
     return {"id": user.id, "login": user.login}
+
+
+# @router.post("/token-json")
+# def login_token_json(payload: LoginJSON, db: Session = Depends(get_db)):
+#     from methods.auth.auth import Authentification
+#     try:
+#         auth = Authentification(payload.username, payload.password)
+#         user = auth.authenticate_user(db)
+#         if not user:
+#             raise HTTPException(status_code=401, detail="Invalid credentials")
+#         token = auth.create_access_token({"sub": user.login})
+#         return {"access_token": token, "token_type": "bearer"}
+#     except Exception as e:
+#         logging.exception("Login error: %s", e)
+#         raise HTTPException(status_code=500, detail="Internal server error")
+
+# @router.get("/me")
+# async def me(user: User = Depends(get_current_user)):
+#     return {"id": user.id, "login": user.login}
