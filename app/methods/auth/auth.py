@@ -1,4 +1,4 @@
-#VM_share/app/methods/auth/auth.py
+# /app/methods/auth/auth.py
 import logging
 import os
 import configs.log_config as logs
@@ -27,7 +27,6 @@ try:
     )
 
 except Exception as e:
-    print(f'Error: {e}')
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s.%(msecs)05d %(message)s',
@@ -92,25 +91,33 @@ class Authentification:
 
 
 async def get_current_user(request: Request) -> User:
+    # Try header first (backward compatible)
+    token = None
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        logging.warning("VM_share/app/methods/auth/auth.py: Authorization failed: Missing or malformed token header")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):]
+
+    # Fallback: HttpOnly cookie (persist across refresh)
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        logging.warning("VM_share/app/methods/auth/auth.py: Authorization failed: no token in header or cookie")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-    token = auth_header[len("Bearer "):]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         login = payload.get("sub")
         if not login:
-            logging.warning("VM_share/app/methods/auth/auth.py: Authorization failed: Token missing 'sub' field")
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         db = SessionLocal()
-        user = db.query(User).filter(User.login == login).first()
-        db.close()
+        try:
+            user = db.query(User).filter(User.login == login).first()
+        finally:
+            db.close()
 
         if not user:
-            logging.warning(f"VM_share/app/methods/auth/auth.py: Authorization failed: User '{login}' not found in database")
             raise HTTPException(status_code=401, detail="User not found")
 
         logging.info(f"VM_share/app/methods/auth/auth.py: Authenticated request from user '{login}'")

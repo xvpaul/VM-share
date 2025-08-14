@@ -1,10 +1,9 @@
-#VM_share/app/methods/manager/OverlayManager.py
+# /app/methods/manager/OverlayManager.py
 import subprocess
 import socket
 import json
 import time
 import os
-import configs.vm_config as configs
 import configs.vm_profiles as vm_profiles
 import configs.log_config as logs
 import logging
@@ -27,7 +26,6 @@ try:
     )
 
 except Exception as e:
-    print(f'Error: {e}')
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s.%(msecs)05d %(message)s',

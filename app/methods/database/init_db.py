@@ -1,4 +1,4 @@
-#VM_share/app/methods/database/init_db.py
+# /app/methods/database/init_db.py
 from database import Base, engine
 from models import User
 

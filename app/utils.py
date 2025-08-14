@@ -1,3 +1,4 @@
+# /utils.py
 import socket
 import subprocess
 import logging
@@ -36,22 +37,18 @@ def cleanup_vm(vmid: str, sessions: dict):
 
         logging.info(f"[cleanup_vm] Cleaning up VM {vmid} for user {user_id} with OS type {os_type}")
 
-        # Kill QEMU process using overlay path
         subprocess.run(["pkill", "-f", str(overlay_path)], check=False)
         logging.info(f"[cleanup_vm] Killed QEMU processes using {overlay_path}")
 
-        # Kill websockify process containing vmid
         subprocess.run(["pkill", "-f", vmid], check=False)
         logging.info(f"[cleanup_vm] Killed Websockify processes containing {vmid}")
 
-        # Delete overlay file
         if overlay_path.exists():
             overlay_path.unlink()
             logging.info(f"[cleanup_vm] Deleted overlay file {overlay_path}")
         else:
             logging.warning(f"[cleanup_vm] Overlay file not found: {overlay_path}")
 
-        # Remove leftover UNIX sockets
         vnc_sock = RUN_DIR / f"vnc-{vmid}.sock"
         qmp_sock = RUN_DIR / f"qmp-{vmid}.sock"
         for sock in (vnc_sock, qmp_sock):

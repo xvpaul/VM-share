@@ -1,2 +1,2 @@
-LOG_DIR = '/root/myapp/logs'
+LOG_DIR = '/Users/soledaco/Desktop/logs' #'/root/myapp/logs'
 LOG_NAME = 'logs.txt'

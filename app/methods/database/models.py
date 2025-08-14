@@ -1,4 +1,4 @@
-#VM_share/app/methods/database/models.py
+# /app/methods/database/models.py
 from sqlalchemy import Column, Integer, String
 from .database import Base
 
