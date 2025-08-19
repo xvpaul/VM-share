@@ -49,7 +49,7 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
         body = await request.json()
-        login = body.get("login")
+        login = body.get("login")   # <------ swap to username back
         password = body.get("password")
 
         if not login or not password:
@@ -59,23 +59,24 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         existing = db.query(User).filter(User.login == login).first()
         if existing:
             if Authentification.verify_password(password, existing.hashed_password):
-                token = Authentification.create_access_token({"sub": existing.login})
-                resp = JSONResponse({
-                    "message": "Logged in",
-                    "id": existing.id,
-                    "access_token": token,
-                    "token_type": "bearer"
-                })
-                resp.set_cookie(
-                    key="access_token",
-                    value=token,
-                    httponly=True,
-                    secure=False,      # <------ TRUE!!!!
-                    samesite="lax",
-                    path="/",
-                    max_age=60*60*8,  
-                )
-                return resp
+                # token = Authentification.create_access_token({"sub": existing.login})
+                # resp = JSONResponse({
+                #     "message": "Logged in",
+                #     "id": existing.id,
+                #     "access_token": token,
+                #     "token_type": "bearer"
+                # })
+                # resp.set_cookie(
+                #     key="access_token",
+                #     value=token,
+                #     httponly=True,
+                #     secure=False,      # <------ TRUE!!!!
+                #     samesite="lax",
+                #     path="/",
+                #     max_age=60*60*8,  
+                # )
+                # return resp
+                raise HTTPException(status_code=409, detail="User exists")
             else:
                 logging.warning(f"VM_share/app/routers/auth.py: Login failed for existing user '{login}': wrong password")
                 raise HTTPException(status_code=401, detail="User exists, wrong password")
@@ -102,7 +103,8 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
             max_age=60*60*8,
         )
         return resp
-
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{body.get('login', 'unknown')}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
