@@ -1,7 +1,7 @@
 # /app/routers/vm.py
 import secrets
 import logging
-from pathlib import Path
+# from pathlib import Path
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -34,14 +34,15 @@ async def run_vm_script(
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
         os_type = request.os_type
-
+        # todo group-policy
         existing = store.get_running_by_user(user_id)
-        if existing:
+        # print(existing)
+        if existing is not None:
             logging.info(f"[run_vm_script] User {user_id} already has VM {existing['vmid']}")
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server_config.SERVER_HOST}/novnc/vnc.html?host={server_config.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={existing['http_port']}"
             })
 
         logging.info(f"[run_vm_script] Launch requested by {user.login} (id={user_id}); vmid={vmid}")
@@ -53,7 +54,7 @@ async def run_vm_script(
         meta = manager.boot_vm(vmid)  # should return at least {"vnc_socket": "..."} or {"vnc_host": "...", "vnc_port": ...}
         logging.info(f"[run_vm_script] VM booted (vmid={vmid})")
 
-        # Pick target for websockify based on your meta format
+        # Pick target for websockify based on meta format
         if "vnc_socket" in meta:
             target = meta["vnc_socket"]                    # unix socket path
         else:
@@ -67,6 +68,8 @@ async def run_vm_script(
             "user_id": user_id,
             "http_port": http_port,
             "os_type": os_type,
+            #!!! PID additition !!!
+            "pid": meta['pid']
         })
 
         response = {

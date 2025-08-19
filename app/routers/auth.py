@@ -10,12 +10,12 @@ from methods.database.database import get_db
 from methods.database.models import User
 from pydantic import BaseModel
 from methods.auth.auth import get_current_user, Authentification
+from configs.config import COOKIE_MAX_AGE
+
 
 class LoginJSON(BaseModel):
     username: str
     password: str
-
-COOKIE_MAX_AGE = 60*60*8  # 8h
 
 """
 Logging configuration 

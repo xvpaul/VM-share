@@ -5,11 +5,12 @@ import configs.log_config as logs
 from sqlalchemy.orm import Session 
 from fastapi import Request, HTTPException
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer
+# from fastapi.security import OAuth2PasswordBearer
 from methods.database.database import SessionLocal
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from methods.database.models import User
+from configs.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 """
 Logging configuration 
@@ -33,12 +34,6 @@ except Exception as e:
         datefmt='%Y-%m-%d %H-%M-%S',
     )
     logging.error(f"Failed to initialize file logging: {e}")
-
-
-
-SECRET_KEY = "your-secret-key"  # keep this secret!
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

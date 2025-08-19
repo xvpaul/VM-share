@@ -84,7 +84,7 @@ class QemuOverlayManager:
         qmp = RUN_DIR / f"qmp-{vmid}.sock"
         return vnc, qmp
 
-    def boot_vm(self, vmid: str, memory_mb: int = None) -> dict:
+    def boot_vm(self, vmid: str, memory_mb: int = None, wait_timeout_s: float = 10.0) -> dict:
         overlay = self.overlay_path()
         if not overlay.exists():
             error_msg = f"Overlay missing for user {self.user_id}: {overlay}"
@@ -98,6 +98,15 @@ class QemuOverlayManager:
                 logging.warning(f"Removed existing socket: {s}")
 
         mem = str(memory_mb or self.profile["default_memory"])
+
+        # NEW: keep artifacts together and poll for this pidfile
+        pidfile = RUN_DIR / f"qemu-{vmid}.pid"
+        try:
+            if pidfile.exists():
+                pidfile.unlink()
+        except Exception as e:
+            logging.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
+
         cmd = [
             "qemu-system-x86_64",
             "-m", mem,
@@ -107,6 +116,7 @@ class QemuOverlayManager:
             "-qmp", f"unix:{qmp_sock},server,nowait",
             "-display", "none",
             "-daemonize",
+            "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
         ]
 
         logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
@@ -121,7 +131,28 @@ class QemuOverlayManager:
             logging.error(error_msg)
             raise RuntimeError(error_msg)
 
-        logging.info(f"QEMU successfully started for user {self.user_id} (vmid={vmid})")
+        # NEW: race-proof wait for pidfile to appear (qemu writes it after daemonize)
+        deadline = time.time() + wait_timeout_s
+        qemu_pid = None
+        last_exc = None
+        while time.time() < deadline:
+            if pidfile.exists():
+                try:
+                    qemu_pid = int(pidfile.read_text().strip())
+                    break
+                except Exception as e:
+                    last_exc = e
+            time.sleep(0.05)
+
+        if qemu_pid is None:
+            msg = (
+                f"QEMU started but no pidfile within {wait_timeout_s}s "
+                f"(expected at {pidfile}). Last read error: {last_exc}. STDERR: {result.stderr}"
+            )
+            logging.error(msg)
+            raise FileNotFoundError(msg)
+
+        logging.info(f"QEMU successfully started for user {self.user_id} (vmid={vmid}) with PID {qemu_pid}")
 
         return {
             "user_id": self.user_id,
@@ -130,5 +161,6 @@ class QemuOverlayManager:
             "overlay": str(overlay),
             "vnc_socket": str(vnc_sock),
             "qmp_socket": str(qmp_sock),
-            "started_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+            "started_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+            "pid": qemu_pid,  # NEW: included in return
         }
