@@ -210,4 +210,8 @@ __marimo__/
  ../.DS_Store
 .DS_Store
 
+#my folders and files
 push
+vm 
+depmap.py
+RDD.md
