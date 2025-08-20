@@ -1,3 +1,9 @@
+// Palettes
+// FF6B6B
+// 52357B
+// 210F37
+// FFB200
+
 particlesJS("particles-js", {
     particles: {
         number: {
@@ -8,13 +14,13 @@ particlesJS("particles-js", {
             }
         },
         color: {
-            value: "#52357B"
+            value: "#FFB200"
         },
         shape: {
             type: "circle",
             stroke: {
                 width: 0,
-                color: "#52357B"
+                color: "#FFB200"
             },
             polygon: {
                 nb_sides: 5
@@ -48,7 +54,7 @@ particlesJS("particles-js", {
         line_linked: {
             enable: true,
             distance: 150,
-            color: "#52357B",
+            color: "#FFB200",
             opacity: 1,
             width: 1
         },
@@ -75,7 +81,7 @@ particlesJS("particles-js", {
       resize: true
     },
     modes: {
-      repulse: { distance: 200, duration: 0.5 },
+      repulse: { distance: 150, duration: 0.5 },
       push: { particles_nb: 2 },
       // keep your other modes if any
     }

@@ -76,14 +76,15 @@
 <section class="relative max-w-6xl mx-auto px-4">
   <!-- Arrows -->
   <button id="os-prev"
-          class="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
-    &#8592;
-  </button>
-  <button id="os-next"
-          class="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
-    &#8594;
-  </button>
-
+        class="absolute -left-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+               bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
+  &#8592;
+</button>
+<button id="os-next"
+        class="absolute -right-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+               bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
+  &#8594;
+</button>
   <!-- Carousel -->
   <div class="overflow-hidden mt-4">
     <div id="os-track"
@@ -148,7 +149,7 @@ class="vm-btn flex items-center justify-center gap-2 text-base px-4 py-2 rounded
         <div class="h-full rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
           <h3 class="text-2xl font-semibold mb-2">Custom Image</h3>
           <p class="text-neutral-400 mb-4">Upload your own disk image.</p>
-          <input id="custom-file" data-custom type="file" accept=".qcow2"
+          <input id="custom-file" data-custom type="file" accept=".iso,.qcow2"
                  class="block w-full text-sm mb-3 file:mr-4 file:rounded-md file:border-0 file:bg-fuchsia-500/20 file:px-3 file:py-2 file:text-fuchsia-200 file:ring-1 file:ring-fuchsia-400/30 file:hover:bg-fuchsia-500/30" />
          <button data-os="custom" id="custom-btn" disabled
 class="vm-btn flex items-center justify-center gap-2 text-base px-4 py-2 rounded-md bg-black/60 ring-1 ring-white/10 hover:bg-black/80 transition-all mx-auto mt-2"

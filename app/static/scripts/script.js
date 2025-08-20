@@ -291,24 +291,96 @@ function renderUserMenu(container) {
     if (os) runVM(os);
   });
 
-  // 2) Handle custom image: enable its button when a file is picked.
-  //    Use delegation so it also works on clones (the original is enough, but this is safe).
-  document.addEventListener("change", (e) => {
-    const input = e.target.closest("input[type='file'][data-custom]");
-    if (!input) return;
-    const panel = input.closest("article");
-    const launchBtn = panel?.querySelector(".vm-btn[data-os='custom']");
-    if (launchBtn) launchBtn.disabled = !input.files?.length;
-  });
+  // Enable "Launch Custom Image" when a file is picked (delegation, clone-safe)
+document.addEventListener("change", (e) => {
+  const input = e.target.closest("input[type='file'][data-custom]");
+  if (!input) return;
+  const panel = input.closest("article");
+  const launchBtn = panel?.querySelector(".vm-btn[data-os='custom']");
+  if (launchBtn) launchBtn.disabled = !input.files?.length;
+});
 
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".vm-btn[data-os='custom']");
-    if (!btn) return;
-    // You can grab the nearest file input in the same slide/panel
-    const panel = btn.closest("article");
-    const fileInput = panel?.querySelector("input[type='file'][data-custom]");
-    if (!fileInput?.files?.length) return;
-    // If you need to upload the file, add your upload flow here.
-    runVM("custom");
-  });
+// Upload to /api/post, then trigger /run-iso (no body)
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".vm-btn[data-os='custom']");
+  if (!btn) return;
+
+  const panel = btn.closest("article");
+  const fileInput = panel?.querySelector("input[type='file'][data-custom]");
+  const file = fileInput?.files?.[0];
+  if (!file) return;
+
+  // Optional progress element in the same slide:
+  // <progress value="0" max="100" data-upload-progress class="w-full h-2"></progress>
+  const progressEl = panel?.querySelector('progress[data-upload-progress]');
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Uploading…";
+
+  try {
+    // 1) Upload file to /api/post with progress
+    const fd = new FormData();
+    fd.append("file", file, file.name); // change field name if your backend expects different
+
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/post");
+      xhr.withCredentials = true;
+
+      xhr.upload.onprogress = (evt) => {
+        if (!progressEl || !evt.lengthComputable) return;
+        progressEl.value = Math.round((evt.loaded / evt.total) * 100);
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else {
+          let msg = `Upload failed (${xhr.status})`;
+          try {
+            const d = JSON.parse(xhr.responseText || "{}");
+            msg = d.detail || d.error || msg;
+          } catch {}
+          reject(new Error(msg));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.send(fd);
+    });
+
+    // 2) Trigger run with no payload
+    btn.textContent = "Launching…";
+    const res = await fetch("/api/run-iso", {
+      method: "POST", // or "GET" if your route expects GET; switch if needed
+      credentials: "include",
+    });
+
+    if (res.redirected) {
+      window.location.href = res.url;
+      return;
+    }
+
+    // Optional JSON contract fallback (ignore if you don't return JSON)
+    let data = null;
+    try { data = await res.json(); } catch {}
+    if (!res.ok) {
+      const msg = (data && (data.detail || data.error)) || `Launch failed (${res.status})`;
+      throw new Error(msg);
+    }
+    if (data && data.redirect) {
+      window.location.href = data.redirect;
+    } else {
+      // If server just returns 200 without redirect
+      alert("Custom image queued. If nothing happens, check your dashboard.");
+    }
+  } catch (err) {
+    console.error("Custom image flow error:", err);
+    alert(err.message || "Custom image launch failed");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    if (progressEl) progressEl.value = 0;
+  }
+});
+
 });

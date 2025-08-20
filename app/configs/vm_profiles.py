@@ -14,4 +14,7 @@ VM_PROFILES = {
         "base_image": Path("/root/myapp/base_images/Tiny/tinycore.qcow2"),
         "default_memory": 1024,
     },
+    "custom": {
+        "base_image": Path("/Users/soledaco/Desktop/storage/{uid}.iso"),
+    }
 }
