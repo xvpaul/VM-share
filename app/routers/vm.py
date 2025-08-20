@@ -95,7 +95,7 @@ async def run_custom_iso(
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
 
-        # enforce single VM per user
+        # one VM per user
         existing = store.get_running_by_user(user_id)
         if existing:
             return JSONResponse({
@@ -105,17 +105,14 @@ async def run_custom_iso(
                             f"?host={server_config.SERVER_HOST}&port={existing['http_port']}"
             })
 
-        # resolve ISO path from profile
-        profile = vm_profiles.VM_PROFILES["custom"]
-        iso_path = str(profile["base_image"]).format(uid=user_id)
+        # build absolute ISO path from profile
+        tpl = str(vm_profiles.VM_PROFILES["custom"]["base_image"])
+        iso_abs = str(Path(tpl.format(uid=user_id)).expanduser().resolve(strict=True))
 
-        if not Path(iso_path).exists():
-            raise HTTPException(status_code=404, detail=f"ISO not found for user {user_id}: {iso_path}")
-
-        logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_path}")
+        logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs}")
 
         manager = QemuOverlayManager(user_id, vmid, "custom")
-        meta = manager.boot_from_iso(vmid=vmid, iso_path=iso_path)
+        meta = manager.boot_from_iso(vmid=vmid, iso_path=iso_abs)
 
         target = meta["vnc_socket"]
         http_port = ws.start(vmid, target)
@@ -135,8 +132,9 @@ async def run_custom_iso(
                         f"?host={server_config.SERVER_HOST}&port={http_port}",
         })
 
-    except HTTPException:
-        raise
+    except FileNotFoundError as e:
+        logging.exception(f"[run_custom_iso] ISO not found: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logging.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

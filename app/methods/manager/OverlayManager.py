@@ -48,29 +48,27 @@ class QemuOverlayManager:
         self.os_type = os_type
 
     def overlay_path(self) -> Path:
-        prefix = self.profile["overlay_prefix"]
-        return self.profile["overlay_dir"] / f"{prefix}_{self.vmid}.qcow2"
+        overlay_dir = self.profile.get("overlay_dir")
+        prefix = self.profile.get("overlay_prefix")
+        if not overlay_dir or not prefix:
+            raise ValueError(f"profile '{self.os_type}' is ISO-only; overlays are not supported")
+        return overlay_dir / f"{prefix}_{self.vmid}.qcow2"
 
     def create_overlay(self) -> Path:
+        if not self.profile.get("overlay_dir") or not self.profile.get("overlay_prefix"):
+            raise ValueError(f"profile '{self.os_type}' is ISO-only; use /run-iso")
         try:
             overlay = self.overlay_path()
             if overlay.exists():
                 logging.info(f"Overlay already exists for user {self.user_id}: {overlay}")
                 return overlay
-
             subprocess.check_call([
-                "qemu-img", "create",
-                "-f", "qcow2",
-                "-F", "qcow2",
-                "-b", str(self.profile["base_image"]),
+                "qemu-img", "create", "-f", "qcow2",
+                "-F", "qcow2", "-b", str(self.profile["base_image"]),
                 str(overlay)
             ])
             logging.info(f"Created overlay for user {self.user_id}: {overlay}")
             return overlay
-
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to create overlay for user {self.user_id}. Command failed: {e}")
-            raise
         except Exception as e:
             logging.exception(f"Unexpected error during overlay creation for user {self.user_id}: {e}")
             raise
@@ -265,28 +263,32 @@ class QemuOverlayManager:
         *,
         memory_mb: int | None = None,
         cpus: int | None = None,
-        data_disk_gb: int | None = None,          # optional scratch disk for live writes
-        install_disk_path: str | None = None,     # optional target disk to install into
+        data_disk_gb: int | None = None,
+        install_disk_path: str | None = None,
         wait_timeout_s: float = 10.0,
-        force_uefi: bool | None = None,           # IGNORED (BIOS-only)
-        ovmf_code_path: str | None = None,        # IGNORED (BIOS-only)
+        force_uefi: bool | None = None,           # ignored (BIOS-only)
+        ovmf_code_path: str | None = None,        # ignored (BIOS-only)
         extra_qemu_args: list[str] | None = None,
     ) -> dict:
-        """
-        Instance: boot any QEMU-compatible ISO via VNC (for noVNC), **BIOS-only**.
-        - No UEFI/OVMF, no '-bios' flag.
-        - No '-cpu host' (safe under TCG). If you later enable KVM/HVF, you can add accel/cpu logic.
-        - Still supports optional scratch disk and install target.
-        """
-        iso = Path(iso_path)
-        if not iso.exists():
-            raise FileNotFoundError(f"ISO not found: {iso}")
+        # 0) Absolute ISO + quick validity checks
+        iso = Path(iso_path).expanduser().resolve(strict=True)
+        size = iso.stat().st_size
+        if size < 10 * 1024 * 1024:
+            raise RuntimeError(f"ISO too small ({size} bytes): {iso}")
+        try:
+            with iso.open("rb") as f:
+                f.seek(0x8000)
+                hdr = f.read(8192)
+                if b"CD001" not in hdr and b"NSR02" not in hdr and b"NSR03" not in hdr:
+                    raise RuntimeError(f"File is not ISO9660/UDF (no CD001/NSR0x at 0x8000): {iso}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to inspect ISO {iso}: {e}")
 
-        # Resources
+        # 1) Resources (defaults from profile)
         mem = str(memory_mb or self.profile.get("default_memory", 2048))
         smp = str(cpus or self.profile.get("default_cpus", 2))
 
-        # Sockets/pidfile
+        # 2) Sockets/pidfile
         vnc_sock, qmp_sock = self._socket_paths(vmid)
         pidfile = RUN_DIR / f"qemu-{vmid}.pid"
         for p in (vnc_sock, qmp_sock, pidfile):
@@ -297,7 +299,7 @@ class QemuOverlayManager:
             except Exception as e:
                 logging.warning(f"[boot_from_iso] cleanup failed for {p}: {e}")
 
-        # Optional scratch disk (uses overlay_dir if present; else RUN_DIR)
+        # 3) Optional scratch disk
         scratch_path = None
         if data_disk_gb:
             if data_disk_gb <= 0:
@@ -310,41 +312,36 @@ class QemuOverlayManager:
                 ])
                 logging.info(f"[boot_from_iso] created scratch disk: {scratch_path}")
 
-        # Build QEMU command (VNC only; BIOS/SeaBIOS default; no '-cpu host')
+        # 4) Build minimal, VNC‑only, BIOS (SeaBIOS) command
         cmd = [
-                "qemu-system-x86_64",
-                "-machine", "q35,accel=tcg",
-                "-smp", smp,
-                "-m", mem,
-                "-display", "none",
-                "-vnc", f"unix:{vnc_sock}",
-                "-qmp", f"unix:{qmp_sock},server,nowait",
-                "-daemonize",
-                "-pidfile", str(pidfile),
-                "-cdrom", str(iso),
-                "-boot", "d",
-                "-nic", "user,model=virtio-net-pci",
-                "-vga", "std",              # simple, VNC-friendly; broadest compatibility
-            ]
-
+            "qemu-system-x86_64",
+            "-machine", "pc,accel=tcg",                # BIOS-friendly, works with -cdrom
+            "-smp", smp,
+            "-m", mem,
+            "-display", "none",
+            "-vnc", f"unix:{vnc_sock}",
+            "-qmp", f"unix:{qmp_sock},server,nowait",
+            "-daemonize",
+            "-pidfile", str(pidfile),
+            "-cdrom", str(iso),                        # ABSOLUTE path
+            "-boot", "d",
+            "-nic", "user,model=virtio-net-pci",
+            "-vga", "std",
+        ]
         if scratch_path:
             cmd += ["-drive", f"file={scratch_path},format=qcow2,if=virtio,cache=writeback,discard=unmap"]
-
         if install_disk_path:
-            target = Path(install_disk_path)
-            if not target.exists():
-                raise FileNotFoundError(f"Install target not found: {target}")
+            target = Path(install_disk_path).expanduser().resolve(strict=True)
             cmd += ["-drive", f"file={target},format=qcow2,if=virtio,cache=writeback,discard=unmap"]
-
         if extra_qemu_args:
             cmd += list(extra_qemu_args)
 
         logging.info(
-            "Launching ISO (VNC, BIOS) user=%s vmid=%s os=%s iso=%s mem=%s smp=%s",
-            self.user_id, vmid, self.os_type, iso.name, mem, smp
+            "Launching ISO (VNC, BIOS) user=%s vmid=%s os=%s iso_abs=%s size=%s mem=%s smp=%s",
+            self.user_id, vmid, self.os_type, str(iso), size, mem, smp
         )
 
-        # Launch
+        # 5) Launch
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             msg = (
@@ -354,7 +351,7 @@ class QemuOverlayManager:
             logging.error(msg)
             raise RuntimeError(msg)
 
-        # Wait for pidfile
+        # 6) Wait for pidfile
         deadline = time.time() + wait_timeout_s
         qemu_pid = None
         last_exc = None
