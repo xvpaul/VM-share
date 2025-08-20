@@ -2,6 +2,97 @@
 // Auth Modal Handling
 // =====================
 document.addEventListener("DOMContentLoaded", () => {
+const track = document.getElementById("os-track");
+const prevBtn = document.getElementById("os-prev");
+const nextBtn = document.getElementById("os-next");
+
+let perView = getSlidesPerView();
+let originalSlides = Array.from(track.children);
+let total = originalSlides.length;
+let current = total; // start in middle after clones
+let isTransitioning = false;
+
+// Clone slides
+function setupClones() {
+  const head = originalSlides.slice(-perView).map(el => el.cloneNode(true));
+  const tail = originalSlides.slice(0, perView).map(el => el.cloneNode(true));
+  head.forEach(clone => track.insertBefore(clone, track.firstChild));
+  tail.forEach(clone => track.appendChild(clone));
+  originalSlides = Array.from(track.children).slice(perView, perView + total);
+}
+
+// Get how many slides are visible
+function getSlidesPerView() {
+  const w = window.innerWidth;
+  if (w >= 1024) return 3;
+  if (w >= 640) return 2;
+  return 1;
+}
+
+// Animate to index
+function goTo(index) {
+  const slide = track.children[index];
+  if (!slide || isTransitioning) return;
+  isTransitioning = true;
+  track.style.transition = "transform 0.5s ease";
+  track.style.transform = `translateX(-${slide.offsetLeft}px)`;
+}
+
+// Instant jump
+function jumpTo(index) {
+  const slide = track.children[index];
+  if (!slide) return;
+  track.style.transition = "none";
+  track.style.transform = `translateX(-${slide.offsetLeft}px)`;
+}
+
+// Loop around if on clone
+function checkLoop() {
+  const realStart = perView;
+  const realEnd = track.children.length - perView;
+  if (current >= realEnd) {
+    current = realStart;
+    jumpTo(current);
+  } else if (current < realStart) {
+    current = realEnd - 1;
+    jumpTo(current);
+  }
+}
+
+// Navigation
+function next() {
+  if (isTransitioning) return;
+  current++;
+  goTo(current);
+}
+function prev() {
+  if (isTransitioning) return;
+  current--;
+  goTo(current);
+}
+
+nextBtn.addEventListener("click", next);
+prevBtn.addEventListener("click", prev);
+
+// Reset on resize
+window.addEventListener("resize", () => {
+  perView = getSlidesPerView();
+  setTimeout(() => jumpTo(current), 10);
+});
+
+// Transition end = unlock & check loop
+track.addEventListener("transitionend", (e) => {
+  if (e.propertyName === "transform") {
+    isTransitioning = false;
+    checkLoop();
+  }
+});
+
+// Setup
+setupClones();
+setTimeout(() => jumpTo(current), 0);
+
+
   const authBtn   = document.getElementById("auth-btn");
   const logoutBtn = document.getElementById("logout-btn");
   const authModal = document.getElementById("auth-modal");

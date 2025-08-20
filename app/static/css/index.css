@@ -1,3 +1,11 @@
+/* hide scrollbar but preserve scroll/snap */
+.scrollbar-hidden {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;    /* Firefox */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;            /* Chrome/Safari */
+}
 body {
   font-family: 'Inter', sans-serif;
 }
@@ -46,4 +54,28 @@ svg {
 .main-content {
   padding-top: 8rem;
   text-align: center;
+}
+
+#prev-btn,
+#next-btn {
+  z-index: 9999 !important;
+  pointer-events: auto;
+}
+
+#carousel-track {
+  will-change: transform;
+}
+
+#os-track {
+  display: flex;
+  will-change: transform;
+}
+
+.os-slide {
+  transition: opacity 0.4s ease;
+}
+
+.os-slide.fade-out {
+  opacity: 0;
+  pointer-events: none;
 }
