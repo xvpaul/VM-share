@@ -1,0 +1,13 @@
+/* Minimal monochrome theme overrides */
+* { transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+html, body { height: 100%; }
+body { background: #000; color: #fff; }
+
+
+/* Focus states */
+input:focus { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.12); }
+button:focus { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.18); }
+
+
+/* Improve clickable targets */
+button { cursor: pointer; }

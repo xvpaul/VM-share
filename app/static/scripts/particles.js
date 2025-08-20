@@ -1,7 +1,7 @@
 particlesJS("particles-js", {
     particles: {
         number: {
-            value: 20,
+            value: 100,
             density: {
                 enable: true,
                 value_area: 800
@@ -50,7 +50,7 @@ particlesJS("particles-js", {
             distance: 150,
             color: "#52357B",
             opacity: 1,
-            width: 3
+            width: 1
         },
         move: {
             enable: true,
@@ -76,7 +76,7 @@ particlesJS("particles-js", {
     },
     modes: {
       repulse: { distance: 200, duration: 0.5 },
-      push: { particles_nb: 1 },
+      push: { particles_nb: 2 },
       // keep your other modes if any
     }
   },

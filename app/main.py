@@ -9,6 +9,7 @@ from routers.root import router as root_router
 from routers.vm   import router as vm_router
 from routers.auth import router as auth_router
 from routers.sessions import router as sessions_router
+from routers.pages import router as pages_router
 
 from methods.manager.SessionManager import get_session_store
 from utils import cleanup_vm 
@@ -66,6 +67,7 @@ app.include_router(vm_router, prefix="/api", tags=["vm"])
 app.include_router(auth_router, tags=["auth"])
 app.include_router(sessions_router)
 app.include_router(metrics_router)
+app.include_router(pages_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/novnc", StaticFiles(directory="static/novnc-ui", html=True), name="novnc")

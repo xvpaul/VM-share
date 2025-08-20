@@ -56,26 +56,18 @@ svg {
   text-align: center;
 }
 
-#prev-btn,
-#next-btn {
-  z-index: 9999 !important;
-  pointer-events: auto;
-}
 
 #carousel-track {
   will-change: transform;
 }
 
-#os-track {
-  display: flex;
-  will-change: transform;
-}
-
-.os-slide {
-  transition: opacity 0.4s ease;
-}
+.os-slide { flex: 0 0 auto; }
+#os-track { position: relative; z-index: 0; }
+#os-prev, #os-next { position: absolute; z-index: 10; }
 
 .os-slide.fade-out {
   opacity: 0;
   pointer-events: none;
 }
+
+

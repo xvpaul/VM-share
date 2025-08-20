@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auth • Sign in / Sign up</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ["Inter", "system-ui"] } } } };
+  </script>
+</head>
+<body class="h-full bg-black text-white">
+  <main class="flex min-h-screen items-center justify-center p-6">
+    <div class="w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl">      <!-- Tabs -->
+      <div class="mb-6 grid grid-cols-2 rounded-xl border border-white/15 p-1 text-sm" role="tablist">
+        <button id="tab-signin" role="tab" aria-selected="true" aria-controls="panel-signin" class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black" data-active="true">Sign in</button>
+        <button id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup" class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black">Sign up</button>
+      </div>
+
+      <!-- Google only -->
+      <button class="mb-5 inline-flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="h-5 w-5"><path fill="currentColor" d="M43.6 20.1H42V20H24v8h11.3A12 12 0 1 1 24 12a12 12 0 0 1 7.9 3l5.7-5.7A20 20 0 1 0 44 24c0-.5 0-2.6-.4-3.9Z"/></svg>
+        Continue with Google
+      </button>
+
+      <div class="my-4 flex items-center gap-3">
+        <div class="h-px flex-1 bg-white/10"></div>
+        <span class="text-[11px] uppercase tracking-wider text-white/50">or</span>
+        <div class="h-px flex-1 bg-white/10"></div>
+      </div>
+
+      <!-- Panels -->
+
+      <!-- Sign In -->
+      <div id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" class="grid gap-4">
+        <form class="grid gap-4">
+          <div class="grid gap-2">
+            <label for="login" class="text-sm">Login</label>
+            <input id="login" name="login" type="login" class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="password" class="text-sm">Password</label>
+            <input id="password" name="password" type="password" class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <button type="submit" class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">Sign in</button>
+        </form>
+      </div>
+
+      <!-- Sign Up -->
+      <div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" class="hidden grid gap-4">
+        <form class="grid gap-4">
+          <div class="grid gap-2">
+            <label for="login" class="text-sm">Email</label>
+            <input id="login" name="login" type="login" class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="password2" class="text-sm">Password</label>
+            <input id="password2" name="password" type="password" class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="confirm" class="text-sm">Confirm password</label>
+            <input id="confirm" name="confirm" type="password" class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <button type="submit" class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">Create account</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="static/scripts/signup.js"></script>
+</body>
+</html>
