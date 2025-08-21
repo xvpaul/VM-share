@@ -5,7 +5,7 @@ VM_PROFILES = {
     "alpine": {
         "overlay_dir": Path("/root/myapp/overlays/Alpine"),
         "overlay_prefix": "alpine",
-        "base_image": Path("/root/myapp/base_images/Alpine/alpine.qcow2"),
+        "base_image": Path("/root/myapp/base_images/Alpine/alpine-base.qcow2"),
         "default_memory": 1024,
     },
     "tiny": {
@@ -17,7 +17,7 @@ VM_PROFILES = {
     "ubuntu": {
         "overlay_dir": Path("/root/myapp/overlays/Ubuntu"),
         "overlay_prefix": "ubuntu",
-        "base_image": Path("/root/myapp/base_images/Ubuntu/ubuntu.qcow2"),
+        "base_image": Path("/root/myapp/base_images/Ubuntu/ubuntu20-base.qcow2"),
         "default_memory": 2048,
     },
     "custom": {
