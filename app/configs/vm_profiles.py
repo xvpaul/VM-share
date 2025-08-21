@@ -3,9 +3,9 @@ from pathlib import Path
 
 VM_PROFILES = {
     "alpine": {
-        "overlay_dir": Path("/Users/soledaco/Desktop/bb"),
+        "overlay_dir": Path("/root/myapp/overlays/Alpine"),
         "overlay_prefix": "alpine",
-        "base_image": Path("/Users/soledaco/Desktop/bb/alpine.qcow2"),
+        "base_image": Path("/root/myapp/base_images/Alpine/alpine.qcow2"),
         "default_memory": 1024,
     },
     "tiny": {
@@ -13,6 +13,12 @@ VM_PROFILES = {
         "overlay_prefix": "tiny",
         "base_image": Path("/root/myapp/base_images/Tiny/tinycore.qcow2"),
         "default_memory": 1024,
+    },
+    "ubuntu": {
+        "overlay_dir": Path("/root/myapp/overlays/Ubuntu"),
+        "overlay_prefix": "ubuntu",
+        "base_image": Path("/root/myapp/base_images/Ubuntu/ubuntu.qcow2"),
+        "default_memory": 2048,
     },
     "custom": {
         "base_image": Path("/Users/soledaco/Desktop/storage/{uid}.iso"),
