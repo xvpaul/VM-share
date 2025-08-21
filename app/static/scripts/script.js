@@ -152,7 +152,7 @@ async function initHeaderAuth() {
 
 async function isAuthenticated() {
   try {
-    const r = await fetch("/me", { credentials: "include" });
+    const r = await fetch("/auth/me", { credentials: "include" });
     return r.ok;
   } catch {
     return false;
