@@ -55,7 +55,7 @@ SQLAlchemy==2.0.30
 starlette==0.37.2
 typer>=0.15.1
 typing-inspection==0.4.0
-typing_extensions==4.8.0
+typing_extensions>=4.12.0
 ujson==5.9.0
 urllib3==2.2.1
 uvicorn==0.28.1
