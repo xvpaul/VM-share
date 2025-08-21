@@ -17,4 +17,4 @@ class WSSettings:
 ws_settings = WSSettings()
 
 
-SERVER_HOST = '127.0.0.1' #"83.69.248.229"
+SERVER_HOST = '5.101.67.252/' #"83.69.248.229"

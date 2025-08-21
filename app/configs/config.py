@@ -35,11 +35,12 @@ CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
 # app/configs/vm_profiles.py
 
+
 VM_PROFILES = {
     "alpine": {
-        "overlay_dir": Path("/Users/soledaco/Desktop/bb"),
+        "overlay_dir": Path("/root/myapp/overlays/Alpine"),
         "overlay_prefix": "alpine",
-        "base_image": Path("/Users/soledaco/Desktop/bb/alpine.qcow2"),
+        "base_image": Path("/root/myapp/base_images/Alpine/alpine-base.qcow2"),
         "default_memory": 1024,
     },
     "tiny": {
@@ -48,7 +49,14 @@ VM_PROFILES = {
         "base_image": Path("/root/myapp/base_images/Tiny/tinycore.qcow2"),
         "default_memory": 1024,
     },
+    "ubuntu": {
+        "overlay_dir": Path("/root/myapp/overlays/Ubuntu"),
+        "overlay_prefix": "ubuntu",
+        "base_image": Path("/root/myapp/base_images/Ubuntu/ubuntu20-base.qcow2"),
+        "default_memory": 2048,
+    },
     "custom": {
         "base_image": Path("/Users/soledaco/Desktop/storage/{uid}.iso"),
     }
 }
+
