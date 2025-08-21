@@ -1,5 +1,6 @@
 # app/configs/config.py
 from dotenv import load_dotenv, find_dotenv
+from pathlib import Path
 import os
 
 # Load .env if present (won't override real env vars)
@@ -25,3 +26,29 @@ SECRET_KEY   = env("SECRET_KEY", required=True)
 ALGORITHM    = env("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = env("ACCESS_TOKEN_EXPIRE_MINUTES", 30, cast=int)
 COOKIE_MAX_AGE = env("COOKIE_MAX_AGE", 604800, cast=int)
+
+
+# 5 GiB cap by default (tune as you like)
+MAX_ISO_BYTES = 5 * 1024 * 1024 * 1024
+CHUNK_SIZE = 1024 * 1024  # 1 MiB
+
+
+# app/configs/vm_profiles.py
+
+VM_PROFILES = {
+    "alpine": {
+        "overlay_dir": Path("/Users/soledaco/Desktop/bb"),
+        "overlay_prefix": "alpine",
+        "base_image": Path("/Users/soledaco/Desktop/bb/alpine.qcow2"),
+        "default_memory": 1024,
+    },
+    "tiny": {
+        "overlay_dir": Path("/root/myapp/overlays/Tiny"),
+        "overlay_prefix": "tiny",
+        "base_image": Path("/root/myapp/base_images/Tiny/tinycore.qcow2"),
+        "default_memory": 1024,
+    },
+    "custom": {
+        "base_image": Path("/Users/soledaco/Desktop/storage/{uid}.iso"),
+    }
+}

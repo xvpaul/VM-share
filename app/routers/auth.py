@@ -205,10 +205,10 @@ def logout_user():
     resp.delete_cookie("access_token", path="/")
     return resp
 
-@router.get("/me")
-async def me(user: User = Depends(get_current_user)):
-    logging.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
-    return {"id": user.id, "login": user.login}
+# @router.get("/me")
+# async def me(user: User = Depends(get_current_user)):
+#     logging.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
+#     return {"id": user.id, "login": user.login}
 
 
 # @router.post("/token-json")

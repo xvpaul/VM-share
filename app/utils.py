@@ -29,7 +29,7 @@ def _to_int(val: Optional[str]) -> Optional[int]:
 
 def cleanup_vm(vmid: str, store) -> None:
     """
-    Cleans up QEMU VM processes, sockets, and overlay file for a given VM ID.
+    Cleans up QEMU VM processes, sockets, overlay/scratch/custom ISO file for a given VM ID.
     `store` is a Redis-backed SessionStore with `.get(vmid)` and `.delete(vmid)`.
     """
     try:
@@ -41,31 +41,33 @@ def cleanup_vm(vmid: str, store) -> None:
         user_id = session.get("user_id")
         os_type = session.get("os_type")
 
-        # overlay path may be stored as string; derive if missing
-        overlay_path = session.get("overlay_path")
-        if not overlay_path:
-            if not os_type or os_type not in vm_profiles.VM_PROFILES:
-                logging.error(f"[cleanup_vm] Unknown/missing os_type '{os_type}' for VM {vmid}")
-                # remove broken session to avoid leaks
-                try:
-                    store.delete(vmid)
-                except Exception:
-                    logging.exception(f"[cleanup_vm] store.delete failed for {vmid}")
-                return
-            profile = vm_profiles.VM_PROFILES[os_type]
-            overlay_path = profile["overlay_dir"] / f"{profile['overlay_prefix']}_{vmid}.qcow2"
-        else:
-            overlay_path = Path(overlay_path)
-
         logging.info(f"[cleanup_vm] Cleaning VM {vmid} (user={user_id}, os={os_type})")
 
-        # PIDs from Redis are strings → cast safely
-        qemu_pid = _to_int(session.get("qemu_pid"))
+        # Figure out what to remove later
+        files_to_remove = []
+
+        if os_type == "custom":
+            iso_path = session.get("iso")
+            if iso_path:
+                files_to_remove.append(Path(iso_path))
+        else:
+            overlay_path = session.get("overlay_path")
+            if overlay_path:
+                files_to_remove.append(Path(overlay_path))
+            else:
+                if os_type and os_type in vm_profiles.VM_PROFILES:
+                    profile = vm_profiles.VM_PROFILES[os_type]
+                    files_to_remove.append(
+                        profile["overlay_dir"] / f"{profile['overlay_prefix']}_{vmid}.qcow2"
+                    )
+
+        # Kill processes
+        qemu_pid = _to_int(session.get("qemu_pid") or session.get("pid"))
         ws_pid = _to_int(session.get("websockify_pid") or session.get("ws_pid"))
 
         if ws_pid:
             try:
-                os.kill(ws_pid, 15)  # SIGTERM
+                os.kill(ws_pid, 15)
                 logging.info(f"[cleanup_vm] SIGTERM → websockify pid={ws_pid}")
             except ProcessLookupError:
                 logging.info(f"[cleanup_vm] websockify pid={ws_pid} already gone")
@@ -74,29 +76,25 @@ def cleanup_vm(vmid: str, store) -> None:
 
         if qemu_pid:
             try:
-                os.kill(qemu_pid, 15)  # SIGTERM
+                os.kill(qemu_pid, 15)
                 logging.info(f"[cleanup_vm] SIGTERM → qemu pid={qemu_pid}")
             except ProcessLookupError:
                 logging.info(f"[cleanup_vm] qemu pid={qemu_pid} already gone")
             except Exception:
                 logging.exception(f"[cleanup_vm] failed to SIGTERM qemu pid={qemu_pid}")
         else:
-            # fallback heuristics if no pid known
-            subprocess.run(["pkill", "-f", str(overlay_path)], check=False)
             subprocess.run(["pkill", "-f", vmid], check=False)
-            logging.info(f"[cleanup_vm] pkill by overlay/vmid issued")
 
-        # Remove overlay
-        try:
-            if overlay_path.exists():
-                overlay_path.unlink()
-                logging.info(f"[cleanup_vm] Deleted overlay {overlay_path}")
-            else:
-                logging.warning(f"[cleanup_vm] Overlay not found: {overlay_path}")
-        except Exception:
-            logging.exception(f"[cleanup_vm] Failed to delete overlay {overlay_path}")
+        # Remove overlay/ISO files
+        for f in files_to_remove:
+            try:
+                if f and f.exists():
+                    f.unlink()
+                    logging.info(f"[cleanup_vm] Deleted {f}")
+            except Exception:
+                logging.exception(f"[cleanup_vm] Failed to delete {f}")
 
-        # Remove unix sockets
+        # Remove sockets
         for sock in (RUN_DIR / f"vnc-{vmid}.sock", RUN_DIR / f"qmp-{vmid}.sock"):
             try:
                 if sock.exists():

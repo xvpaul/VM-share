@@ -1,11 +1,15 @@
 # observability/metrics.py
+import os
 import asyncio
 from collections import defaultdict
 from datetime import datetime  # only for type completeness; not used now
 from typing import Optional
 
 import psutil
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, HTTPException, Query
+from fastapi.responses import JSONResponse
+import httpx
+
 from prometheus_client import (
     Gauge,
     REGISTRY,
@@ -16,6 +20,12 @@ from prometheus_client import (
 from methods.database.database import SessionLocal
 from methods.database.models import User
 from methods.manager.SessionManager import get_session_store  # Redis-backed
+
+# -----------------------
+# Config
+# -----------------------
+# Point this at your Prometheus server (NOT an exporter):
+PROM_URL = os.getenv("PROM_URL", "http://localhost:9090")
 
 # -----------------------
 # Prometheus metrics
@@ -44,9 +54,51 @@ USER_RSS_BYTES = Gauge(
 
 router = APIRouter()
 
+# -----------------------
+# Unified /metrics endpoint
+# - No query params  -> return exporter text (for Prometheus scraping)
+# - query=...        -> proxy to Prometheus /api/v1/query (JSON)
+# - query_range      -> if start,end,step provided, call /api/v1/query_range
+# -----------------------
 @router.get("/metrics")
-def prometheus_metrics():
-    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+async def metrics(
+    query: Optional[str] = Query(None, description="PromQL (instant)"),
+    start: Optional[float] = Query(None, description="range start (unix seconds)"),
+    end: Optional[float] = Query(None, description="range end (unix seconds)"),
+    step: Optional[float] = Query(None, description="range step (seconds)"),
+):
+    # If no PromQL params -> return standard exposition text
+    if query is None and start is None and end is None and step is None:
+        return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+    # Otherwise, proxy to Prometheus HTTP API and return JSON for the UI
+    if query is None:
+        raise HTTPException(status_code=400, detail="Missing 'query' parameter for Prometheus API")
+
+    # Decide endpoint based on presence of range params
+    use_range = start is not None and end is not None and step is not None
+    api_path = "/api/v1/query_range" if use_range else "/api/v1/query"
+    params = {"query": query}
+    if use_range:
+        params.update({"start": start, "end": end, "step": step})
+
+    url = f"{PROM_URL.rstrip('/')}{api_path}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url, params=params)
+        # Ensure JSON; if Prometheus is wrong target you'll get non-JSON
+        try:
+            data = r.json()
+        except ValueError:
+            # Fallback: show a helpful message including the first bytes
+            snippet = (r.text or "")[:80]
+            raise HTTPException(
+                status_code=500,
+                detail=f"Prometheus did not return JSON (check PROM_URL). First bytes: {snippet}"
+            )
+        return JSONResponse(status_code=r.status_code, content=data)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Prometheus unreachable: {e}")
 
 # -----------------------
 # Helpers
@@ -186,3 +238,29 @@ async def metrics_collector(_unused, stop_event: asyncio.Event, interval_sec: in
             await asyncio.wait_for(stop_event.wait(), timeout=interval_sec)
         except asyncio.TimeoutError:
             pass
+
+
+@router.get("/metrics_json")
+def metrics_json():
+    """
+    Return current metrics from the Python Prometheus REGISTRY as structured JSON.
+    Useful for UI display without a Prometheus server.
+    """
+    families = []
+    for mf in REGISTRY.collect():
+        fam = {
+            "name": mf.name,
+            "type": mf.type,
+            "documentation": getattr(mf, "documentation", "") or "",
+            "samples": [],
+        }
+        for s in mf.samples:
+            # s is a Sample(name, labels, value, timestamp, exemplar, metadata)
+            fam["samples"].append({
+                "name": s.name,
+                "labels": s.labels,
+                "value": s.value,
+                "timestamp": s.timestamp,
+            })
+        families.append(fam)
+    return JSONResponse(content={"status": "success", "data": families})

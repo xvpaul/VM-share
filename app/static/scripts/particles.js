@@ -7,20 +7,20 @@
 particlesJS("particles-js", {
     particles: {
         number: {
-            value: 100,
+            value: 120,
             density: {
                 enable: true,
                 value_area: 800
             }
         },
         color: {
-            value: "#FFB200"
+            value: "#52357B"
         },
         shape: {
             type: "circle",
             stroke: {
                 width: 0,
-                color: "#FFB200"
+                color: "#52357B"
             },
             polygon: {
                 nb_sides: 5
@@ -53,8 +53,8 @@ particlesJS("particles-js", {
         },
         line_linked: {
             enable: true,
-            distance: 150,
-            color: "#FFB200",
+            distance: 200,
+            color: "#52357B",
             opacity: 1,
             width: 1
         },
@@ -81,7 +81,7 @@ particlesJS("particles-js", {
       resize: true
     },
     modes: {
-      repulse: { distance: 150, duration: 0.5 },
+      repulse: { distance: 100, duration: 0.5 },
       push: { particles_nb: 2 },
       // keep your other modes if any
     }

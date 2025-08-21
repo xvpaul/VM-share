@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from configs import vm_profiles
+from configs.config import VM_PROFILES, MAX_ISO_BYTES, CHUNK_SIZE
 from methods.database.database import get_db
 from methods.auth.auth import get_current_user
 from methods.database.models import User
@@ -52,7 +52,7 @@ async def send_post(
         user_id = str(user.id)
 
         # derive destination path from vm_profiles["custom"]["base_image"]
-        profile = vm_profiles.VM_PROFILES.get("custom")
+        profile = VM_PROFILES.get("custom")
         if not profile or "base_image" not in profile:
             logger.error("post.py: [send_post] Missing 'custom.base_image' in vm_profiles")
             raise HTTPException(status_code=500, detail="Server misconfiguration")

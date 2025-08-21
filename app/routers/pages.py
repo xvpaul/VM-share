@@ -9,3 +9,7 @@ router = APIRouter(tags=["pages"])
 @router.get("/signup", response_class=HTMLResponse)
 def signup(request: Request):
     return templates.TemplateResponse("signup.html", {"request": request})
+
+@router.get("/profile", response_class=HTMLResponse)
+def signup(request: Request):
+    return templates.TemplateResponse("profile.html", {"request": request})
