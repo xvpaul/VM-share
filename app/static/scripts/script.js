@@ -267,7 +267,7 @@ function renderUserMenu(container) {
 
   async function runVM(os_type) {
     try {
-      const res = await fetch("api/run-script", {
+      const res = await fetch("/vm/run-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -350,7 +350,7 @@ document.addEventListener("click", async (e) => {
 
     // 2) Trigger run with no payload
     btn.textContent = "Launching…";
-    const res = await fetch("/api/run-iso", {
+    const res = await fetch("/vm/run-iso", {
       method: "POST", // or "GET" if your route expects GET; switch if needed
       credentials: "include",
     });

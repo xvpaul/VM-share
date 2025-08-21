@@ -31,7 +31,7 @@ document.querySelector("#panel-signin form").addEventListener("submit", async (e
 
   try {
     // If your /token expects JSON:
-    const res = await fetch("/token", {
+    const res = await fetch("/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -56,7 +56,7 @@ document
     const password = e.target.querySelector("input[name='password']").value;
     alert(login, password)
     try {
-      const res = await fetch("/register", {
+      const res = await fetch("/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
