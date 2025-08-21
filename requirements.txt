@@ -46,7 +46,7 @@ PyYAML==6.0
 redis==4.5.5
 requests==2.31.0
 rich==13.7.1
-rich-toolkit==0.14.6
+rich-toolkit>=0.14.8
 rsa==4.9
 shellingham==1.5.4
 six==1.16.0
