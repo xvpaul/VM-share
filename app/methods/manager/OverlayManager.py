@@ -116,12 +116,11 @@ class QemuOverlayManager:
         cmd = [
     "qemu-system-x86_64",
     "-machine", "type=q35,accel=kvm,kernel_irqchip=split",
-    "-cpu", "EPYC-Rome,migratable=off",   # or "EPYC" / "qemu64"
+    "-cpu", "qemu64",
     "-m", str(mem),
     "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
     "-nic", "user,model=virtio-net-pci",
-    "-vnc", f"unix:{vnc_sock}",           # classic syntax
-    "-display", "none",
+    "-display", f"vnc=unix:{vnc_sock}",
     "-qmp", f"unix:{qmp_sock},server,nowait",
     "-daemonize",
     "-pidfile", str(pidfile),
@@ -130,6 +129,7 @@ class QemuOverlayManager:
     "-global", "kvm-pit.lost_tick_policy=discard",
     "-no-hpet",
 ]
+
 
 
         logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
