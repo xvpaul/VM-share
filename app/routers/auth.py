@@ -11,6 +11,9 @@ from methods.database.models import User
 from pydantic import BaseModel
 from methods.auth.auth import get_current_user, Authentification
 from configs.config import COOKIE_MAX_AGE
+from methods.manager.SessionManager import get_session_store, SessionStore
+from utils import cleanup_vm
+
 
 
 class LoginJSON(BaseModel):
@@ -202,10 +205,12 @@ def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-def logout_user():
-    logging.info("VM_share/app/routers/auth.py: Logging out user and deleting auth cookie")
+def logout_user(user: User = Depends(get_current_user), store: SessionStore = Depends(get_session_store)):
+    logging.info("VM_share/app/routers/auth.py: Logging out user, deleting auth cookie and terminating sessions...")
     resp = JSONResponse({"message": "Logged out"})
     resp.delete_cookie("access_token", path="/")
+    vmid = store.get_running_by_user(user.id)
+    cleanup_vm(vmid, store)
     return resp
 
 @router.get("/me")
