@@ -45,6 +45,29 @@ const NAV_LINKS = Array.from(document.querySelectorAll('#sidebar-nav .nav-link')
 let CURRENT_USER = { login: 'user', role: 'user' };
 
 // --- Helpers ---
+// Add near the top (helpers):
+function extractActiveVms(families, currentUserId) {
+  // 1) Prefer global total: vmshare_active_sessions
+  const sess = families.find(f => f.name === 'vmshare_active_sessions');
+  if (sess && Array.isArray(sess.samples)) {
+    const s = sess.samples.find(s => s.name === 'vmshare_active_sessions');
+    if (s && typeof s.value === 'number') return s.value;
+  }
+
+  // 2) Fallback: sum per-user series
+  const per = families.find(f => f.name === 'vmshare_user_active_vms');
+  if (per && Array.isArray(per.samples)) {
+    // If you ever want per-admin total, we sum all users.
+    // If you want per-current-user instead, filter by labels.user_id === currentUserId.
+    let total = 0;
+    for (const s of per.samples) {
+      if (typeof s.value === 'number') total += s.value;
+    }
+    return total;
+  }
+  return null;
+}
+
 function setActiveRouteStyles(route) {
   NAV_LINKS.forEach(a => {
     const isActive = a.dataset.route === route;
@@ -167,8 +190,9 @@ function makeAppTable(families) {
   });
   return table;
 }
+
 async function fetchAppMetrics() {
-  if (!appStatus || !appResults) return;
+  if(!appStatus || !appResults) return;
   appStatus.textContent = 'Fetching…';
   appResults.innerHTML = '';
   try {
@@ -176,12 +200,22 @@ async function fetchAppMetrics() {
     const data = await res.json();
     if (data.status !== 'success') throw new Error('Unexpected response');
     const families = data.data || [];
+
+    // NEW: update the KPI number
+    const active = extractActiveVms(families, CURRENT_USER?.id);
+    const kpi = document.getElementById('active-vms');
+    if (kpi) kpi.textContent = (active ?? 0).toString();
+
+    // existing table render
     appStatus.textContent = `${families.length} metric families`;
     appResults.appendChild(makeAppTable(families));
   } catch (err) {
     appStatus.textContent = `Request failed: ${err.message}`;
+    const kpi = document.getElementById('active-vms');
+    if (kpi) kpi.textContent = '0';
   }
 }
+
 appRefresh?.addEventListener('click', fetchAppMetrics);
 
 // --- Prometheus (unchanged) ---
