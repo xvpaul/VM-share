@@ -210,7 +210,7 @@ def logout_user(user: User = Depends(get_current_user), store: SessionStore = De
     resp = JSONResponse({"message": "Logged out"})
     resp.delete_cookie("access_token", path="/")
     vmid = store.get_running_by_user(user.id)
-    cleanup_vm(vmid, store)
+    cleanup_vm(str(vmid), store)
     return resp
 
 @router.get("/me")
