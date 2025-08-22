@@ -95,7 +95,6 @@ async def run_custom_iso(
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
 
-        # one VM per user
         existing = store.get_running_by_user(user_id)
         if existing:
             return JSONResponse({
@@ -105,25 +104,32 @@ async def run_custom_iso(
                             f"?host={server_config.SERVER_HOST}&port={existing['http_port']}"
             })
 
-        # build absolute ISO path from profile
-        tpl = str(vm_profiles.VM_PROFILES["custom"]["base_image"])
-        iso_abs = str(Path(tpl.format(uid=user_id)).expanduser().resolve(strict=True))
+        prof = vm_profiles.VM_PROFILES["custom"]
+        base = Path(prof["base_image"])
+        prefix = str(prof.get("prefix", "{uid}.iso"))
 
+        # derive ISO path
+        if "{uid}" in str(base):
+            iso_path = Path(str(base).format(uid=user_id))
+        elif base.suffix.lower() == ".iso":
+            iso_path = base
+        else:
+            # treat as directory
+            name = prefix.format(uid=user_id)
+            if not name.lower().endswith(".iso"):
+                name += ".iso"
+            iso_path = base / name
+
+        iso_abs = str(iso_path.expanduser().resolve(strict=True))
         logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs}")
 
         manager = QemuOverlayManager(user_id, vmid, "custom")
         meta = manager.boot_from_iso(vmid=vmid, iso_path=iso_abs)
 
-        target = meta["vnc_socket"]
+        target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
         http_port = ws.start(vmid, target)
 
-        store.set(vmid, {
-            **meta,
-            "user_id": user_id,
-            "http_port": http_port,
-            "os_type": "custom",
-            "pid": meta["pid"],
-        })
+        store.set(vmid, {**meta, "user_id": user_id, "http_port": http_port, "os_type": "custom", "pid": meta["pid"]})
 
         return JSONResponse({
             "message": f"Custom ISO VM for {user.login} launched (vmid={vmid})",
