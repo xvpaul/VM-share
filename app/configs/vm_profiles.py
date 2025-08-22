@@ -8,7 +8,7 @@ VM_PROFILES = {
         "base_image": Path("/root/myapp/base_images/Alpine/alpine-base.qcow2"),
         "default_memory": 1024,
     },
-    "Lite": {
+    "lite": {
         "overlay_dir": Path("/root/myapp/overlays/Lite"),
         "overlay_prefix": "lite",
         "base_image": Path("/root/myapp/base_images/Tiny/lite-base.qcow2"),
