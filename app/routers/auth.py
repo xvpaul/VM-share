@@ -209,7 +209,7 @@ def logout_user(user: User = Depends(get_current_user), store: SessionStore = De
     logging.info("VM_share/app/routers/auth.py: Logging out user, deleting auth cookie and terminating sessions...")
     resp = JSONResponse({"message": "Logged out"})
     resp.delete_cookie("access_token", path="/")
-    vmid = store.get_running_by_user(user.id)
+    vmid = store.get_running_by_user(user.id)["vmid"]
     logging.info(f"VM_share/app/routers/auth.py: terminating {vmid} ...")
     cleanup_vm(vmid, store)
     return resp
