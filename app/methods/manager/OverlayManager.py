@@ -102,18 +102,19 @@ class QemuOverlayManager:
             logging.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
         cmd = [
-            "qemu-system-x86_64",
-            "-enable-kvm", # <----- added to test
-            "-accel", "tcg,thread=multi",          # graceful fallback
-            "-m", mem,
-            "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
-            "-nic", "user,model=virtio-net-pci",
-            "-vnc", f"unix:{vnc_sock}",
-            "-qmp", f"unix:{qmp_sock},server,nowait",
-            "-display", "none",
-            "-daemonize",
-            "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
-        ]
+    "qemu-system-x86_64",
+    "-accel", "kvm",
+    "-accel", "tcg,thread=multi",        # fallback if KVM can’t start
+    "-m", str(mem),
+    "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
+    "-nic", "user,model=virtio-net-pci",
+    "-vnc", f"unix:{vnc_sock}",
+    "-display", "none",
+    "-qmp", f"unix:{qmp_sock},server,nowait",
+    "-daemonize",
+    "-pidfile", str(pidfile),
+]
+
         
 
         logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
