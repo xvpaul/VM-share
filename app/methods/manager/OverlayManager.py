@@ -101,18 +101,59 @@ class QemuOverlayManager:
         except Exception as e:
             logging.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
+        # cmd = [
+        #     "qemu-system-x86_64",
+        #     # "-enable-kvm", # <----- added to test
+        #     "-m", mem,
+        #     "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
+        #     "-nic", "user,model=virtio-net-pci",
+        #     "-vnc", f"unix:{vnc_sock}",
+        #     "-qmp", f"unix:{qmp_sock},server,nowait",
+        #     "-display", "none",
+        #     "-daemonize",
+        #     "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
+        # ]
         cmd = [
-            "qemu-system-x86_64",
-            # "-enable-kvm", # <----- added to test
-            "-m", mem,
-            "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
-            "-nic", "user,model=virtio-net-pci",
-            "-vnc", f"unix:{vnc_sock}",
-            "-qmp", f"unix:{qmp_sock},server,nowait",
-            "-display", "none",
-            "-daemonize",
-            "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
-        ]
+                "qemu-system-x86_64",
+
+                # Use KVM + modern chipset + host CPU (stable under nested virt)
+                "-machine", "q35,accel=kvm",
+                "-cpu", "host",
+                "-smp", "1",                 # start with 1 vCPU; raise later after it’s stable
+                "-m", mem,
+
+                # Disk (virtio)
+                "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
+
+                # Networking (slirp) with virtio NIC
+                "-nic", "user,model=virtio-net-pci",
+
+                # Add RNG so early boot entropy isn’t starved (helps cloud-init/SSHD start)
+                "-device", "virtio-rng-pci",
+
+                # Timers/clock tweaks that reduce KVM stalls in nested envs
+                "-global", "kvm-pit.lost_tick_policy=discard",
+                "-no-hpet",
+                "-rtc", "base=utc,driftfix=slew",
+
+                # Headless (you already manage via VNC + QMP)
+                "-display", "none",
+
+                # VNC on a UNIX socket (keep if you really want a framebuffer console;
+                # if you're running server-only, consider removing -vnc entirely)
+                "-vnc", f"unix:{vnc_sock}",
+
+                # Management
+                "-qmp", f"unix:{qmp_sock},server,nowait",
+
+                # Run in background + write pid
+                "-daemonize",
+                "-pidfile", str(pidfile),
+
+                # Finally, enable KVM
+                "-enable-kvm",
+            ]
+
 
         logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
