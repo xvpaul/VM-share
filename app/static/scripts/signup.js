@@ -63,8 +63,7 @@ document
         body: JSON.stringify({ login, password }),
       });
       const data = await res.json();
-      alert(data) // to remove
-      if (!res.ok) throw new Error(data.detail || "Registration failed");
+alert(JSON.stringify(data, null, 2)); // formatted JSON      if (!res.ok) throw new Error(data.detail || "Registration failed");
       console.log("Signed up:", data);
       window.location.href = "/";
     } catch (err) {
