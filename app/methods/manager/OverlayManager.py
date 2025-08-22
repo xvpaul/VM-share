@@ -116,26 +116,17 @@ class QemuOverlayManager:
         cmd = [
     "qemu-system-x86_64",
     "-machine", "type=q35,accel=kvm,kernel_irqchip=split",
-    "-cpu", "EPYC-Rome,migratable=off",
+    "-cpu", "EPYC-Rome,migratable=off",   # or "EPYC" / "qemu64"
     "-m", str(mem),
     "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
     "-nic", "user,model=virtio-net-pci",
-    # Use one of the two display forms below:
-
-    # Option 1: single -display handles VNC over a UNIX socket
-    "-display", f"vnc=unix:{vnc_sock}",
-
-    # Option 2 (if you prefer -vnc): then DON'T set -display none
-    # "-vnc", f"unix:{vnc_sock}",
-
+    "-vnc", f"unix:{vnc_sock}",           # classic syntax
+    "-display", "none",
     "-qmp", f"unix:{qmp_sock},server,nowait",
     "-daemonize",
     "-pidfile", str(pidfile),
-
-    # Helpful for debugging freezes (kept even when daemonized)
     "-D", "qemu.log",
     "-d", "guest_errors",
-    # Small extras that avoid timer stalls on some nested setups:
     "-global", "kvm-pit.lost_tick_policy=discard",
     "-no-hpet",
 ]
