@@ -105,25 +105,46 @@ async def run_custom_iso(
                             f"?host={server_config.SERVER_HOST}&port={existing['http_port']}"
             })
 
-        # build absolute ISO path from profile
-        tpl = str(vm_profiles.VM_PROFILES["custom"]["base_image"])
-        iso_abs = str(Path(tpl.format(uid=user_id)).expanduser().resolve(strict=True))
+        # ---- FIXED: build ISO path correctly ----
+        prof = vm_profiles.VM_PROFILES["custom"]
+        base = Path(prof["base_image"])            # may be dir, file, or template with {uid}
+        prefix = str(prof.get("prefix", "{uid}.iso"))
 
-        logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs}")
+        if "{uid}" in str(base):
+            iso_path = Path(str(base).format(uid=user_id))
+        elif base.suffix.lower() == ".iso":
+            iso_path = base
+        else:
+            # treat as directory + prefix-based filename
+            name = prefix.format(uid=user_id)
+            if not name.lower().endswith(".iso"):
+                name += ".iso"
+            iso_path = base / name
 
+        iso_path = iso_path.expanduser()
+
+        # Validate: must exist, be a file, and not be trivially small
+        if not iso_path.exists():
+            raise FileNotFoundError(f"No ISO found at {iso_path}")
+        if iso_path.is_dir():
+            raise FileNotFoundError(f"Expected an ISO file but got a directory: {iso_path}")
+
+        size = iso_path.stat().st_size
+        MIN_BYTES = 1 * 1024 * 1024  # 1 MiB safety floor; adjust to your policy
+        if size < MIN_BYTES:
+            raise RuntimeError(f"ISO too small ({size} bytes): {iso_path}")
+
+        iso_abs = str(iso_path.resolve(strict=True))
+        logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs} (size={size} bytes)")
+
+        # Launch without overlays
         manager = QemuOverlayManager(user_id, vmid, "custom")
         meta = manager.boot_from_iso(vmid=vmid, iso_path=iso_abs)
 
-        target = meta["vnc_socket"]
+        target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
         http_port = ws.start(vmid, target)
 
-        store.set(vmid, {
-            **meta,
-            "user_id": user_id,
-            "http_port": http_port,
-            "os_type": "custom",
-            "pid": meta["pid"],
-        })
+        store.set(vmid, {**meta, "user_id": user_id, "http_port": http_port, "os_type": "custom", "pid": meta["pid"]})
 
         return JSONResponse({
             "message": f"Custom ISO VM for {user.login} launched (vmid={vmid})",
