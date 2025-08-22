@@ -176,6 +176,66 @@ tabGrafana?.addEventListener('click', () => activate('grafana'));
 tabProm?.addEventListener('click', () => activate('prom'));
 tabApp?.addEventListener('click', () => { activate('app'); fetchAppMetrics(); });
 activate('app'); // default tab
+// --- Grafana integration ---
+const GRAFANA_PROXY = '/grafana/panel.png';
+
+// Define which panels to show (dashboard UID + panel IDs)
+const GRAFANA_PANELS = [
+  { uid: 'yourDashUID', panelId: 2,  title: 'Request rate (rps, 5m)' },
+  { uid: 'yourDashUID', panelId: 4,  title: '95th latency (ms)' },
+  { uid: 'yourDashUID', panelId: 12, title: 'Active VMs / user' },
+];
+
+// Default time range for PNG renders
+let grafanaRange = { from: 'now-1h', to: 'now' };
+let grafanaTimer = null;
+
+function clearGrafanaTimer() { if (grafanaTimer) { clearInterval(grafanaTimer); grafanaTimer = null; } }
+
+async function loadGrafanaPanels() {
+  if (!paneGrafana) return;
+  clearGrafanaTimer();
+
+  paneGrafana.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'grid grid-cols-1 gap-4';
+  paneGrafana.appendChild(grid);
+
+  const makeCard = (title, src) => {
+    const card = document.createElement('div');
+    card.className = 'bg-white/5 rounded-xl p-3 shadow';
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="font-medium">${title}</h4>
+        <span class="text-xs text-neutral-300">${grafanaRange.from} → ${grafanaRange.to}</span>
+      </div>
+      <img class="w-full rounded-md" loading="lazy" alt="${title}" />
+    `;
+    card.querySelector('img').src = src;
+    return card;
+  };
+
+  const urlFor = ({ uid, panelId }) =>
+    `${GRAFANA_PROXY}?uid=${encodeURIComponent(uid)}&panelId=${panelId}` +
+    `&from=${encodeURIComponent(grafanaRange.from)}&to=${encodeURIComponent(grafanaRange.to)}` +
+    `&theme=dark&width=1100&height=300&_=${Date.now()}`; // cache-bust
+
+  // initial render
+  GRAFANA_PANELS.forEach(p => grid.appendChild(makeCard(p.title, urlFor(p))));
+
+  // auto-refresh every 20s
+  grafanaTimer = setInterval(() => {
+    [...grid.querySelectorAll('img')].forEach((img, i) => {
+      img.src = urlFor(GRAFANA_PANELS[i]);
+    });
+  }, 20000);
+}
+
+// kill auto-refresh when modal closes or tab changes
+modal?.addEventListener('click', (e) => { if (e.target === modal) { clearGrafanaTimer(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearGrafanaTimer(); });
+tabGrafana?.addEventListener('click', () => { activate('grafana'); loadGrafanaPanels(); });
+
 
 // --- App Metrics (no Prometheus needed) ---
 function makeAppTable(families) {

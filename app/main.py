@@ -11,24 +11,30 @@ from routers.auth import router as auth_router
 from routers.sessions import router as sessions_router
 from routers.pages import router as pages_router
 from routers.post import router as post_router
-
+from observability.grafana_proxy import router as grafana_router
 
 from methods.manager.SessionManager import get_session_store
 from utils import cleanup_vm 
 
 # --- observability imports ---
-from observability.metrics import router as metrics_router, metrics_collector
+from observability.metrics import (
+    router as metrics_router,
+    metrics_collector,
+    install_http_metrics,
+    should_run_samplers,
+)
 from observability.utils_observability import resource_watchdog
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ---- STARTUP ----
     stop_event = asyncio.Event()
-    tasks = [
-        asyncio.create_task(metrics_collector(get_session_store, stop_event, interval_sec=15)),
-        asyncio.create_task(resource_watchdog(stop_event)),
-    ]
+    tasks = []
+
+    # Start background samplers only if allowed
+    if should_run_samplers():
+        tasks.append(asyncio.create_task(metrics_collector(get_session_store, stop_event, interval_sec=15)))
+        tasks.append(asyncio.create_task(resource_watchdog(stop_event)))
+
     try:
         yield
     finally:
@@ -43,9 +49,8 @@ async def lifespan(app: FastAPI):
 
         logging.info("main.py: lifespan shutdown → beginning cleanup")
         store = get_session_store()
-
         try:
-            sessions = store.items()            # returns List[(vmid, data)]
+            sessions = store.items()
             logging.info(f"main.py: found {len(sessions)} sessions to clean")
         except Exception:
             sessions = []
@@ -61,8 +66,10 @@ async def lifespan(app: FastAPI):
             except Exception:
                 logging.exception(f"store.delete failed for {vmid}")
 
-
 app = FastAPI(lifespan=lifespan)
+
+# http metrics middleware
+install_http_metrics(app)
 
 app.include_router(root_router)
 app.include_router(vm_router, prefix="/vm", tags=["vm"])
@@ -71,6 +78,7 @@ app.include_router(sessions_router)
 app.include_router(metrics_router)
 app.include_router(pages_router)
 app.include_router(post_router)
+app.include_router(grafana_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/novnc", StaticFiles(directory="static/novnc-ui", html=True), name="novnc")

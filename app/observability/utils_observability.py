@@ -1,4 +1,4 @@
-# observability/utils_observability.py
+# /app/observability/utils_observability.py
 import asyncio, psutil, logging
 from datetime import datetime
 from sentry_sdk import capture_message
