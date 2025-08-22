@@ -98,7 +98,7 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
             value=token,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="none", # <----- switch to lax back
             path="/",
             max_age=60*60*8,
         )
