@@ -118,6 +118,7 @@ def start_websockify(vmid: str, port: int, vnc_unix_sock: str, store) -> subproc
     Start websockify for this VM and tail its stdout to react to connects/disconnects.
     `store` is the Redis-backed SessionStore (used to update last_seen and cleanup).
     """
+    logging.info(f"[start_websockify] : Started.")
     static_dir = Path(__file__).parent / "static"
 
     cmd = [
