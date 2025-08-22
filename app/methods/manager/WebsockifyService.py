@@ -9,6 +9,7 @@ from typing import Optional, Any
 
 from utils import find_free_port, cleanup_vm
 from .ProcessManager import ProcRegistry
+from .SessionManager import get_session_store
 
 
 class WebsockifyService:
@@ -31,7 +32,7 @@ class WebsockifyService:
             # .../methods/manager/WebsockifyService.py -> /app/static
             self._static_dir = Path(__file__).resolve().parents[2] / "static"
 
-    def start(self, vmid: str, target: str, port: Optional[int] = None, store: Optional[Any] = None) -> int:
+    def start(self, vmid: str, target: str) -> int:
         """
         Start websockify for this VM and tail its stdout to react to connects/disconnects.
         Returns the public TCP port that websockify listens on.
@@ -44,6 +45,8 @@ class WebsockifyService:
         """
         if port is None:
             port = find_free_port()
+
+        store = get_session_store()
 
         # Build argv (no shell) + normalize target form websockify expects.
         argv = [

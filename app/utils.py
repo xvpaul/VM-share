@@ -112,62 +112,63 @@ def cleanup_vm(vmid: str, store) -> None:
     except Exception as e:
         logging.exception(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
 
+#legacy code
 
-def start_websockify(vmid: str, port: int, vnc_unix_sock: str, store) -> subprocess.Popen:
-    """
-    Start websockify for this VM and tail its stdout to react to connects/disconnects.
-    `store` is the Redis-backed SessionStore (used to update last_seen and cleanup).
-    """
-    logging.info(f"[start_websockify] : Started.")
-    static_dir = Path(__file__).parent / "static"
+# def start_websockify(vmid: str, port: int, vnc_unix_sock: str, store) -> subprocess.Popen:
+#     """
+#     Start websockify for this VM and tail its stdout to react to connects/disconnects.
+#     `store` is the Redis-backed SessionStore (used to update last_seen and cleanup).
+#     """
+#     logging.info(f"[start_websockify] : Started.")
+#     static_dir = Path(__file__).parent / "static"
 
-    cmd = [
-        "websockify",
-        "--web", str(static_dir),
-        "--verbose",
-        f"0.0.0.0:{port}",
-        "--unix-target", vnc_unix_sock,
-    ]
+#     cmd = [
+#         "websockify",
+#         "--web", str(static_dir),
+#         "--verbose",
+#         f"0.0.0.0:{port}",
+#         "--unix-target", vnc_unix_sock,
+#     ]
 
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
+#     proc = subprocess.Popen(
+#         cmd,
+#         stdout=subprocess.PIPE,
+#         stderr=subprocess.STDOUT,
+#         text=True,
+#     )
 
-    def monitor_output():
-        try:
-            if not proc.stdout:
-                return
-            for line in proc.stdout:
-                line = line.strip()
-                logging.info(f"[websockify:{vmid}] {line}")
+#     def monitor_output():
+#         try:
+#             if not proc.stdout:
+#                 return
+#             for line in proc.stdout:
+#                 line = line.strip()
+#                 logging.info(f"[websockify:{vmid}] {line}")
 
-                lower = line.lower()
-                if "client closed connection" in lower:
-                    try:
-                        store.update(vmid, last_seen=str(int(Path().stat().st_mtime_ns // 1_000_000)))
-                    except Exception:
-                        pass
-                    logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
-                    cleanup_vm(vmid, store)
+#                 lower = line.lower()
+#                 if "client closed connection" in lower:
+#                     try:
+#                         store.update(vmid, last_seen=str(int(Path().stat().st_mtime_ns // 1_000_000)))
+#                     except Exception:
+#                         pass
+#                     logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
+#                     cleanup_vm(vmid, store)
 
-                elif "connecting to unix socket" in lower or "accepted connection" in lower:
-                    try:
-                        store.update(vmid, last_seen=str(int(Path().stat().st_mtime_ns // 1_000_000)))
-                    except Exception:
-                        pass
+#                 elif "connecting to unix socket" in lower or "accepted connection" in lower:
+#                     try:
+#                         store.update(vmid, last_seen=str(int(Path().stat().st_mtime_ns // 1_000_000)))
+#                     except Exception:
+#                         pass
 
-        except Exception:
-            logging.exception(f"[websockify:{vmid}] monitor error")
-        finally:
-            try:
-                if proc.poll() is not None:
-                    logging.info(f"[websockify:{vmid}] process exited with code {proc.returncode}, cleanup")
-                    cleanup_vm(vmid, store)
-            except Exception:
-                logging.exception(f"[websockify:{vmid}] finalizer cleanup failed")
+#         except Exception:
+#             logging.exception(f"[websockify:{vmid}] monitor error")
+#         finally:
+#             try:
+#                 if proc.poll() is not None:
+#                     logging.info(f"[websockify:{vmid}] process exited with code {proc.returncode}, cleanup")
+#                     cleanup_vm(vmid, store)
+#             except Exception:
+#                 logging.exception(f"[websockify:{vmid}] finalizer cleanup failed")
 
-    Thread(target=monitor_output, daemon=True).start()
-    return proc
+#     Thread(target=monitor_output, daemon=True).start()
+#     return proc
