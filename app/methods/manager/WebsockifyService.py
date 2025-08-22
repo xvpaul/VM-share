@@ -43,8 +43,8 @@ class WebsockifyService:
             port: Optional explicit public TCP port. If None, a free port is chosen.
             store: Optional Redis-backed SessionStore with `update(vmid, last_seen=...)`.
         """
-        if port is None:
-            port = find_free_port()
+        
+        port = find_free_port()
 
         store = get_session_store()
 
