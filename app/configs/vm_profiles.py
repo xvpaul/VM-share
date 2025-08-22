@@ -1,7 +1,7 @@
 # app/configs/vm_profiles.py
 from pathlib import Path
 
-M_PROFILES = {
+VM_PROFILES = {
     "alpine": {
         "overlay_dir": Path("/root/myapp/overlays/Alpine"),
         "overlay_prefix": "alpine",
