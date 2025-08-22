@@ -14,13 +14,13 @@ particlesJS("particles-js", {
             }
         },
         color: {
-            value: "#210F37"
+            value: "#52357B"
         },
         shape: {
             type: "circle",
             stroke: {
                 width: 0,
-                color: "#210F37"
+                color: "#52357B"
             },
             polygon: {
                 nb_sides: 5
@@ -54,7 +54,7 @@ particlesJS("particles-js", {
         line_linked: {
             enable: true,
             distance: 200,
-            color: "#210F37",
+            color: "#52357B",
             opacity: 1,
             width: 1
         },
