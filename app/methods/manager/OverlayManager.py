@@ -103,10 +103,9 @@ class QemuOverlayManager:
 
         cmd = [
     "qemu-system-x86_64",
-    "-accel", "kvm",
+    # "-accel", "kvm",
     "-accel", "tcg,thread=multi",        # fallback if KVM can’t start
     "-m", str(mem),
-    "-vga", "cirrus",
     "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
     "-nic", "user,model=virtio-net-pci",
     "-vnc", f"unix:{vnc_sock}",
