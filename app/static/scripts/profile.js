@@ -9,6 +9,27 @@ const PROM_PROXY = '/metrics';
 const APP_JSON = '/metrics_json';
 const SNAPSHOTS_ENDPOINT = '/snapshots';
 const AUTH_ME = '/auth/me';
+const AUTH_LOGOUT = '/auth/logout';
+const logoutBtn = document.getElementById('logout-btn');
+
+logoutBtn?.addEventListener('click', async () => {
+  try {
+    logoutBtn.disabled = true;
+    const res = await fetch(AUTH_LOGOUT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    });
+    // Regardless of response, bounce the user to your main page
+    window.location.href = 'http://5.101.67.252:8000/';
+  } catch (e) {
+    // Network hiccup — still try to navigate away
+    window.location.href = 'http://5.101.67.252:8000/';
+  } finally {
+    logoutBtn.disabled = false;
+  }
+});
+
 
 // DOM refs
 const modal = document.getElementById('metrics-modal');
