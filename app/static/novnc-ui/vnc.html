@@ -2,72 +2,233 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Alpine Linux</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loading OS…</title>
   <style>
-    :root { --bg:#0f1115; --fg:#e6e6e6; --muted:#9aa1aa; }
-    html, body { height:100%; margin:0; background:var(--bg); color:var(--fg);
-      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    .bar { height:48px; display:flex; align-items:center; gap:12px;
-      padding:0 16px; background:#0b0d11; border-bottom:1px solid #1a1f29; }
-    .title { font-weight:600; letter-spacing:.2px; }
+    :root {
+      --bg: #0b0e13;
+      --panel: #0f141c;
+      --panel-2: #0c1017;
+      --fg: #e8eaed;
+      --muted: #99a2ad;
+      --border: #1f2632;
+      --accent: #4f46e5; /* indigo-600 */
+      --accent-2: #22d3ee; /* cyan-400 */
+      --ok: #22c55e;      /* green-500 */
+      --warn: #f59e0b;    /* amber-500 */
+      --danger: #ef4444;  /* red-500 */
+    }
+    html, body { height:100%; margin:0; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
+                                          radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
+                                          var(--bg);
+      color:var(--fg); font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    /* Layout */
+    body { display:grid; grid-template-rows: auto auto 1fr; min-height: 100svh; }
+    .bar { height:56px; display:flex; align-items:center; gap:12px; padding:0 16px; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border-bottom:1px solid var(--border); backdrop-filter: blur(6px); position: sticky; top:0; z-index:10; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .logo { width:28px; height:28px; border-radius:8px; background: conic-gradient(from 210deg, var(--accent), var(--accent-2)); box-shadow: 0 0 0 1px #ffffff14 inset, 0 4px 20px #00000080; }
+    .title { font-weight:700; letter-spacing:.1px; font-size:15px; }
+    .subtitle { color:var(--muted); font-weight:500; font-size:12px; }
     .spacer { flex:1; }
-    .btn { border:1px solid #2a323e; background:#151922; color:var(--fg);
-      border-radius:10px; padding:8px 12px; cursor:pointer; font-size:14px; }
-    .btn:hover { border-color:#3a4352; }
-    .status { font-size:12px; color:var(--muted); padding:6px 16px; }
-    #screen { height:calc(100% - 48px - 24px); }
-    #screen > canvas { width:100%; height:100%; display:block; image-rendering: crisp-edges; }
+
+    /* Buttons */
+    .btn { border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
+      border-radius:12px; padding:8px 12px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:8px; transition:transform .08s ease, border-color .2s ease, background .2s ease; }
+    .btn:hover { border-color:#2a3547; background:linear-gradient(180deg, #172033, #111722); }
+    .btn:active { transform: translateY(1px); }
+    .btn[disabled] { opacity:.6; cursor:not-allowed; }
+    .btn--ghost { background:transparent; }
+    .btn--ok { border-color:#1e7e43; }
+    .btn--danger { border-color:#592327; }
+
+    /* Icons */
+    .icon { width:16px; height:16px; display:inline-block; }
+
+    /* Status strip */
+    .status { font-size:12px; color:var(--muted); padding:8px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background: var(--panel-2); }
+    .dot { width:8px; height:8px; border-radius:999px; background:#6b7280; box-shadow:0 0 0 2px #00000055; }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.err { background: var(--danger); }
+
+    /* Screen area */
+    #screen { min-height:0; }
+    #screen > canvas { width:100%; height:calc(100svh - 56px - 34px); display:block; image-rendering: crisp-edges; background:#000; }
+
+    /* Toast */
+    .toast { position:fixed; right:16px; bottom:16px; background:#0b121b; border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px; }
+    .toast .dot { box-shadow:none; }
   </style>
 </head>
 <body>
   <div class="bar">
-    <div class="title">Your shit</div>
+    <div class="brand" title="noVNC">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <div class="title"><span id="vm-name">Loading…</span></div>
+        <div class="subtitle" id="vm-sub">Remote console</div>
+      </div>
+    </div>
     <div class="spacer"></div>
-    <button id="btn-full" class="btn">Fullscreen</button>
-    <button id="btn-disc" class="btn">Disconnect</button>
+    <button id="btn-full" class="btn" title="Fullscreen (F)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
+      Fullscreen
+    </button>
+    <button id="btn-shot" class="btn btn--ok" title="Snapshot VM (/snapshot)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3"/></svg>
+      Snapshot
+    </button>
+    <button id="btn-disc" class="btn btn--danger" title="Disconnect (/disconnect)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h13"/><path d="M17 8l4 4-4 4"/></svg>
+      Disconnect
+    </button>
   </div>
-  <div class="status" id="status">Connecting…</div>
+
+  <div class="status" id="status">
+    <span class="dot" id="dot"></span>
+    <span id="status-text">Connecting…</span>
+  </div>
+
   <div id="screen"></div>
 
+  <div id="toast" class="toast" style="display:none">
+    <span class="dot ok"></span>
+    <span id="toast-text">Done</span>
+  </div>
+
   <!-- noVNC core library you copied -->
- <script type="module">
-  import RFB from './core/rfb.js';
+  <script type="module">
+    import RFB from './core/rfb.js';
 
-  // Parse query params
-  const urlParams = new URLSearchParams(window.location.search);
-  const host = urlParams.get("host") || "localhost";
-  const port = urlParams.get("port");
-  const path = "websockify";
+    // —— Helpers ——
+    const $ = (sel) => document.querySelector(sel);
+    function setStatus(text, level='info'){
+      const dot = $('#dot');
+      $('#status-text').textContent = text;
+      dot.classList.remove('ok','warn','err');
+      if (level==='ok') dot.classList.add('ok');
+      else if (level==='warn') dot.classList.add('warn');
+      else if (level==='err') dot.classList.add('err');
+    }
+    let toastTimer;
+    function toast(text, level='ok'){
+      const t = $('#toast');
+      const tt = $('#toast-text');
+      const dot = t.querySelector('.dot');
+      tt.textContent = text;
+      dot.className = 'dot ' + (level==='ok' ? 'ok' : level==='err' ? 'err' : 'warn');
+      t.style.display = 'flex';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2600);
+    }
 
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = `${proto}://${host}:${port}/${path}`;
+    // —— Dynamic title/OS from /user_info ——
+    async function loadOS(){
+      try {
+        const res = await fetch('/user_info', { credentials: 'same-origin' });
+        const ct = res.headers.get('content-type') || '';
+        let os = '';
+        if (ct.includes('application/json')){
+          const j = await res.json();
+          os = j.os || j.OS || j.distro || j.name || '';
+        } else {
+          os = (await res.text()).trim();
+        }
+        if (!os) os = 'Virtual Machine';
+        document.title = os + ' — Console';
+        $('#vm-name').textContent = os;
+        $('#vm-sub').textContent = 'Remote console via noVNC';
+      } catch {
+        document.title = 'Console';
+        $('#vm-name').textContent = 'Console';
+        $('#vm-sub').textContent = 'Remote console via noVNC';
+      }
+    }
+    loadOS();
 
-  const screen = document.getElementById("screen");
-  const status = document.getElementById("status");
+    // —— Build websocket URL ——
+    const urlParams = new URLSearchParams(window.location.search);
+    const host = urlParams.get('host') || window.location.hostname || 'localhost';
+    const port = urlParams.get('port') || window.location.port || (location.protocol==='https:' ? '443' : '80');
+    const path = urlParams.get('path') || 'websockify';
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${proto}://${host}:${port}/${path}`;
 
-  const rfb = new RFB(screen, wsUrl, { credentials: {} });
-  rfb.viewOnly = false;
-  rfb.scaleViewport = true;
-  rfb.resizeSession = true;
+    // —— Setup RFB ——
+    const screen = document.getElementById('screen');
+    const rfb = new RFB(screen, wsUrl, { credentials: {} });
+    rfb.viewOnly = false;
+    rfb.scaleViewport = true;
+    rfb.resizeSession = true;
 
-  rfb.addEventListener("connect", () => status.textContent = "Connected");
-  rfb.addEventListener("disconnect", (e) => {
-    status.textContent = "Disconnected";
-    if (e && e.detail && !e.detail.clean) status.textContent += " (error)";
-  });
+    rfb.addEventListener('connect', () => setStatus('Connected', 'ok'));
+    rfb.addEventListener('disconnect', (e) => {
+      const clean = !e || !e.detail || e.detail.clean;
+      setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
+    });
 
-  document.getElementById("btn-disc").addEventListener("click", () => {
-    try { rfb.disconnect(); } catch(_) {}
-  });
+    // —— Controls ——
+    $('#btn-full').addEventListener('click', async () => {
+      const el = document.documentElement;
+      try {
+        if (!document.fullscreenElement) await el.requestFullscreen();
+        else await document.exitFullscreen();
+      } catch {}
+    });
 
-  document.getElementById("btn-full").addEventListener("click", async () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement) { try { await el.requestFullscreen(); } catch(_) {} }
-    else { try { await document.exitFullscreen(); } catch(_) {} }
-  });
-</script>
+    $('#btn-disc').addEventListener('click', async () => {
+      setStatus('Disconnecting…', 'warn');
+      $('#btn-disc').disabled = true;
+      try {
+        // Prefer POST; fall back to GET if server doesn’t accept it
+        let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
+        if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
+      } catch {}
+      try { rfb.disconnect(); } catch {}
+      toast('Disconnected', 'warn');
+      $('#btn-disc').disabled = false;
+    });
 
+    $('#btn-shot').addEventListener('click', async () => {
+      const b = $('#btn-shot');
+      b.disabled = true; b.textContent = 'Snapshotting…';
+      try {
+        // Prefer POST; fall back to GET
+        let res = await fetch('/snapshot', { method: 'POST', credentials: 'same-origin' });
+        if (!res.ok) res = await fetch('/snapshot', { credentials: 'same-origin' });
+        const ok = res.ok;
+        let msg = 'Snapshot created';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')){
+            const data = await res.json();
+            const id = data.id || data.name || data.snapshot || '';
+            if (id) msg = `Snapshot ${id} created`;
+          } else {
+            const t = (await res.text()).trim();
+            if (t) msg = t;
+          }
+        } catch {}
+        toast(ok ? msg : 'Snapshot request sent');
+        setStatus('Connected', 'ok');
+      } catch (e) {
+        toast('Snapshot failed', 'err');
+        setStatus('Connected', 'ok');
+      } finally {
+        b.disabled = false; b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3"/></svg> Snapshot';
+      }
+    });
 
+    // —— Hotkeys ——
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || (e.key === 'F' && !e.ctrlKey && !e.metaKey)) {
+        e.preventDefault(); $('#btn-full').click();
+      }
+    });
+
+    // Initial status
+    setStatus('Connecting…');
+  </script>
 </body>
 </html>
