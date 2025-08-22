@@ -50,28 +50,44 @@ async def send_post(
 ):
     try:
         user_id = str(user.id)
-
-        # derive destination path from vm_profiles["custom"]["base_image"]
+        # derive destination path from vm_profiles["custom"]
         profile = VM_PROFILES.get("custom")
         if not profile or "base_image" not in profile:
             logger.error("post.py: [send_post] Missing 'custom.base_image' in vm_profiles")
             raise HTTPException(status_code=500, detail="Server misconfiguration")
 
         base_tpl = str(profile["base_image"])
-        # allow both '{uid}' template or a fixed path to a directory
+        prefix_tpl = str(profile.get("prefix", "{uid}.iso"))
+
+        # build filename from prefix (defaults to "{uid}.iso")
+        try:
+            fname = prefix_tpl.format(uid=user_id)
+        except Exception:
+            # fallback if someone misconfigured the template
+            fname = f"{user_id}.iso"
+
+        if not fname.lower().endswith(".iso"):
+            fname = f"{fname}.iso"
+
+        # allow: (a) path template containing {uid}, (b) fixed .iso path, (c) directory path
         if "{uid}" in base_tpl:
             iso_dest = Path(base_tpl.format(uid=user_id))
         else:
             p = Path(base_tpl)
-            iso_dest = p if p.suffix.lower() == ".iso" else (p / f"{user_id}.iso")
+            if p.suffix.lower() == ".iso":
+                # fixed file path; ignore prefix
+                iso_dest = p
+            else:
+                # treat as directory
+                iso_dest = p / fname
 
-        # sanity: ensure parent exists
+        # ensure parent exists
         iso_dest.parent.mkdir(parents=True, exist_ok=True)
 
-        # optional: light validation (content-type is not reliable in browsers)
-        # we primarily enforce the destination suffix to be .iso
+        # enforce .iso suffix even if base_tpl had a wrong suffix
         if iso_dest.suffix.lower() != ".iso":
             iso_dest = iso_dest.with_suffix(".iso")
+
 
         # log and save
         logger.info(
