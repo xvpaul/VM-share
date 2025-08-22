@@ -115,12 +115,22 @@ class QemuOverlayManager:
         # ]
         cmd = [
     "qemu-system-x86_64",
-    "-machine", "type=q35,accel=kvm,kernel_irqchip=split",
-    "-cpu", "qemu64",
+    "-machine", "type=pc,accel=kvm,kernel_irqchip=split",
+    "-cpu", "EPYC,migratable=off",              # or "qemu64"
     "-m", str(mem),
-    "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
-    "-nic", "user,model=virtio-net-pci",
-    "-display", f"vnc=unix:{vnc_sock}",
+
+    "-drive", f"id=drv0,if=none,file={overlay},format=qcow2,cache=writeback,discard=unmap",
+    "-device", "virtio-blk-pci,drive=drv0,bootindex=0",
+
+    "-device", "virtio-net-pci,netdev=n0",
+    "-netdev", "user,id=n0",
+
+    "-vga", "none",
+    "-device", "virtio-vga",
+
+    "-vnc", f"unix:{vnc_sock}",
+    "-display", "none",
+
     "-qmp", f"unix:{qmp_sock},server,nowait",
     "-daemonize",
     "-pidfile", str(pidfile),
