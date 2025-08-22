@@ -12,7 +12,7 @@ VM_PROFILES = {
         "overlay_dir": Path("/root/myapp/overlays/Tiny"),
         "overlay_prefix": "tiny",
         "base_image": Path("/root/myapp/base_images/Tiny/tinycore-base.qcow2"),
-        "default_memory": 1024,
+        "default_memory": 512,
     },
     "lubuntu": {
         "overlay_dir": Path("/root/myapp/overlays/lubuntu"),
