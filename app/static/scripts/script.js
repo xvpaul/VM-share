@@ -265,42 +265,68 @@ function renderUserMenu(container) {
   // VM launch — EVENT DELEGATION (works for clones)
   // =====================
 
-  async function runVM(os_type) {
-    try {
-      const res = await fetch("/vm/run-script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ os_type }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "VM launch failed");
-      if (data.redirect) window.location.href = data.redirect;
-      else alert("VM started but no redirect URL was provided.");
-    } catch (err) {
-      console.error("VM launch error:", err);
-      alert(err.message);
-    }
+  // --- Unified launcher with safeguard ---
+async function runVM(os_type) {
+  // If custom, go straight to /vm/run-iso (no body)
+  if (os_type === "custom") {
+    const res = await fetch("/vm/run-iso", { method: "POST", credentials: "include" });
+    let data = null, text = "";
+    try { data = await res.json(); } catch { try { text = await res.text(); } catch {} }
+    if (!res.ok) throw new Error((data && (data.detail || data.error || data.message)) || text || "VM launch failed");
+    if (data && data.redirect) window.location.href = data.redirect;
+    else alert("VM started but no redirect URL was provided.");
+    return;
   }
 
-  // 1) Clicks on any .vm-btn with data-os
-  track.addEventListener("click", (e) => {
-    const btn = e.target.closest(".vm-btn[data-os]");
-    if (!btn) return;
-    const os = btn.getAttribute("data-os");
-    if (os) runVM(os);
-  });
+  // Non-custom → /vm/run-script
+  try {
+    const res = await fetch("/vm/run-script", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ os_type }),
+    });
 
-  // Enable "Launch Custom Image" when a file is picked (delegation, clone-safe)
+    // If backend says ISO-only for some reason, transparently retry /run-iso
+    if (!res.ok) {
+      let d = null;
+      try { d = await res.clone().json(); } catch {}
+      const detail = d?.detail || d?.error || "";
+      if (/ISO-only/i.test(detail) || /use\s*\/run-iso/i.test(detail)) {
+        return runVM("custom");
+      }
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || "VM launch failed");
+    if (data.redirect) window.location.href = data.redirect;
+    else alert("VM started but no redirect URL was provided.");
+  } catch (err) {
+    console.error("VM launch error:", err);
+    alert(err.message || "VM launch failed");
+  }
+}
+
+// --- 1) Clicks on any .vm-btn with data-os (skip custom here) ---
+track.addEventListener("click", (e) => {
+  const btn = e.target.closest(".vm-btn[data-os]");
+  if (!btn) return;
+  const os = btn.getAttribute("data-os");
+  if (!os) return;
+  if (os === "custom") return; // let the dedicated custom handler handle it
+  runVM(os);
+});
+
+// --- Enable "Launch Custom Image" when a file is picked ---
 document.addEventListener("change", (e) => {
   const input = e.target.closest("input[type='file'][data-custom]");
   if (!input) return;
   const panel = input.closest("article");
   const launchBtn = panel?.querySelector(".vm-btn[data-os='custom']");
-  if (launchBtn) launchBtn.disabled = !input.files?.length;
+  if (launchBtn) launchBtn.disabled = !(input.files && input.files.length);
 });
 
-// Upload to /api/post, then trigger /run-iso (no body)
+// --- Upload to /api/post, then trigger /run-iso (no body) ---
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest(".vm-btn[data-os='custom']");
   if (!btn) return;
@@ -310,10 +336,7 @@ document.addEventListener("click", async (e) => {
   const file = fileInput?.files?.[0];
   if (!file) return;
 
-  // Optional progress element in the same slide:
-  // <progress value="0" max="100" data-upload-progress class="w-full h-2"></progress>
   const progressEl = panel?.querySelector('progress[data-upload-progress]');
-
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Uploading…";
@@ -321,12 +344,13 @@ document.addEventListener("click", async (e) => {
   try {
     // 1) Upload file to /api/post with progress
     const fd = new FormData();
-    fd.append("file", file, file.name); // change field name if your backend expects different
+    fd.append("file", file, file.name);
 
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/post");
       xhr.withCredentials = true;
+      xhr.timeout = 10 * 60 * 1000;
 
       xhr.upload.onprogress = (evt) => {
         if (!progressEl || !evt.lengthComputable) return;
@@ -334,53 +358,28 @@ document.addEventListener("click", async (e) => {
       };
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
-        else {
-          let msg = `Upload failed (${xhr.status})`;
-          try {
-            const d = JSON.parse(xhr.responseText || "{}");
-            msg = d.detail || d.error || msg;
-          } catch {}
-          reject(new Error(msg));
-        }
+        let data = null;
+        try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data || {});
+        else reject(new Error((data && (data.detail || data.error || data.message)) || `Upload failed (${xhr.status})`));
       };
+      xhr.ontimeout = () => reject(new Error("Upload timed out"));
       xhr.onerror = () => reject(new Error("Network error during upload"));
       xhr.send(fd);
     });
 
-    // 2) Trigger run with no payload
+    // 2) Launch ISO (safeguard path)
     btn.textContent = "Launching…";
-    const res = await fetch("/vm/run-iso", {
-      method: "POST", // or "GET" if your route expects GET; switch if needed
-      credentials: "include",
-    });
-
-    if (res.redirected) {
-      window.location.href = res.url;
-      return;
-    }
-
-    // Optional JSON contract fallback (ignore if you don't return JSON)
-    let data = null;
-    try { data = await res.json(); } catch {}
-    if (!res.ok) {
-      const msg = (data && (data.detail || data.error)) || `Launch failed (${res.status})`;
-      throw new Error(msg);
-    }
-    if (data && data.redirect) {
-      window.location.href = data.redirect;
-    } else {
-      // If server just returns 200 without redirect
-      alert("Custom image queued. If nothing happens, check your dashboard.");
-    }
+    await runVM("custom"); // calls /vm/run-iso under the hood
   } catch (err) {
     console.error("Custom image flow error:", err);
     alert(err.message || "Custom image launch failed");
   } finally {
-    btn.disabled = false;
+    btn.disabled = !(fileInput && fileInput.files && fileInput.files.length);
     btn.textContent = originalText;
     if (progressEl) progressEl.value = 0;
   }
 });
+
 
 });
