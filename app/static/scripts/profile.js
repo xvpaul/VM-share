@@ -1,55 +1,112 @@
-// ===== Config =====
-const PROM_PROXY = '/metrics';       // for Prometheus queries (?query=...)
-const APP_JSON   = '/metrics_json';  // works now (no Prometheus server needed)
+// static/scripts/profile.js
+// ------------------------------------------------------------------
+// Fetch /auth/me for { id, login, role }, gate routes accordingly,
+// and keep your original metrics behavior intact.
+// ------------------------------------------------------------------
+
+// Endpoints
+const PROM_PROXY = '/metrics';
+const APP_JSON = '/metrics_json';
 const SNAPSHOTS_ENDPOINT = '/snapshots';
+const AUTH_ME = '/auth/me';
 
-// ===== Session / role (server can set window.__USER__ = {role:'admin'|'user', memberSince:'YYYY'})
-const CURRENT_USER = window.__USER__ || { role: 'user', memberSince: '2025' };
+// DOM refs
+const modal = document.getElementById('metrics-modal');
+const openBtn = document.getElementById('metric-card');
+const closeBtn = document.getElementById('metrics-close');
 
-// ===== DOM refs
-const modal          = document.getElementById('metrics-modal');
-const openBtn        = document.getElementById('metric-card');
-const closeBtn       = document.getElementById('metrics-close');
-const tabGrafana     = document.getElementById('tab-grafana');
-const tabProm        = document.getElementById('tab-prom');
-const tabApp         = document.getElementById('tab-app');
-const paneGrafana    = document.getElementById('pane-grafana');
-const paneProm       = document.getElementById('pane-prom');
-const paneApp        = document.getElementById('pane-app');
-const appRefresh     = document.getElementById('app-refresh');
-const appStatus      = document.getElementById('app-status');
-const appResults     = document.getElementById('app-results');
-const promForm       = document.getElementById('prom-form');
-const promQuery      = document.getElementById('prom-query');
-const promStatus     = document.getElementById('prom-status');
-const promResults    = document.getElementById('prom-results');
+const tabGrafana  = document.getElementById('tab-grafana');
+const tabProm     = document.getElementById('tab-prom');
+const tabApp      = document.getElementById('tab-app');
+const paneGrafana = document.getElementById('pane-grafana');
+const paneProm    = document.getElementById('pane-prom');
+const paneApp     = document.getElementById('pane-app');
+
+const appRefresh  = document.getElementById('app-refresh');
+const appStatus   = document.getElementById('app-status');
+const appResults  = document.getElementById('app-results');
+
+const promForm    = document.getElementById('prom-form');
+const promQuery   = document.getElementById('prom-query');
+const promStatus  = document.getElementById('prom-status');
+const promResults = document.getElementById('prom-results');
+
 const snapshotsRefresh = document.getElementById('snapshots-refresh');
 const snapshotsStatus  = document.getElementById('snapshots-status');
 const snapshotsResults = document.getElementById('snapshots-results');
 
-// ===== Username: fetch from /username (text OR JSON)
-async function loadUsername() {
-  const el = document.getElementById('ui-username');
-  if (!el) return;
-  try {
-    const res = await fetch('/username', { credentials: 'same-origin' });
-    const ct  = res.headers.get('content-type') || '';
-    let name  = '';
-    if (ct.includes('application/json')) {
-      const j = await res.json();
-      name = j.username ?? j.name ?? '';
-    } else {
-      name = (await res.text()).trim();
-    }
-    if (name) el.textContent = name;
-    else el.textContent = 'user';
-  } catch {
-    el.textContent = 'user';
-  }
-}
-loadUsername();
+const usernameEl = document.getElementById('ui-username');
+const overviewLink = document.querySelector('[data-route="overview"]');
 
-// ===== Modal controls (metrics viewer)
+const ROUTES = ['overview','payments','snapshots'];
+const SECTIONS = Object.fromEntries(ROUTES.map(r => [r, document.getElementById(`route-${r}`)]));
+const NAV_LINKS = Array.from(document.querySelectorAll('#sidebar-nav .nav-link'));
+
+let CURRENT_USER = { login: 'user', role: 'user' };
+
+// --- Helpers ---
+function setActiveRouteStyles(route) {
+  NAV_LINKS.forEach(a => {
+    const isActive = a.dataset.route === route;
+    a.classList.toggle('bg-white/10', isActive);
+    a.classList.toggle('ring-1', isActive);
+    a.classList.toggle('ring-white/10', isActive);
+  });
+}
+
+function showRoute(route) {
+  // Gate Overview for non-admins
+  if (route === 'overview' && CURRENT_USER.role !== 'admin') {
+    route = 'payments';
+    if (location.hash !== '#payments') history.replaceState(null, '', '#payments');
+  }
+
+  ROUTES.forEach(r => {
+    const el = SECTIONS[r];
+    if (!el) return;
+    if (r === route) { el.classList.remove('hidden'); el.classList.add('block'); }
+    else { el.classList.add('hidden'); el.classList.remove('block'); }
+  });
+
+  setActiveRouteStyles(route);
+
+  // Load data per route
+  if (route === 'snapshots') fetchSnapshots();
+  if (route === 'overview') fetchAppMetrics(); // keep metrics fresh
+}
+
+function initialRoute() {
+  const hash = (location.hash || '').replace('#','');
+  let target = ROUTES.includes(hash) ? hash : 'overview';
+  if (target === 'overview' && CURRENT_USER.role !== 'admin') target = 'payments';
+
+  // Show/hide Overview link based on role
+  if (overviewLink) overviewLink.style.display = (CURRENT_USER.role === 'admin') ? '' : 'none';
+
+  showRoute(target);
+}
+
+window.addEventListener('hashchange', () => {
+  const hash = (location.hash || '').replace('#','');
+  showRoute(ROUTES.includes(hash) ? hash : 'overview');
+});
+
+// --- Auth: get role + username from /auth/me ---
+async function fetchMe() {
+  try {
+    const res = await fetch(AUTH_ME, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { login, role } = await res.json();
+    CURRENT_USER = { login: login || 'user', role: role || 'user' };
+  } catch {
+    // default to restricted user if anything fails
+    CURRENT_USER = { login: 'user', role: 'user' };
+  }
+  // Update UI
+  if (usernameEl) usernameEl.textContent = CURRENT_USER.login;
+}
+
+// --- Metrics modal controls (unchanged behavior) ---
 const openModal  = () => { modal?.classList.remove('hidden'); modal?.classList.add('flex'); };
 const closeModal = () => { modal?.classList.add('hidden');   modal?.classList.remove('flex'); };
 openBtn?.addEventListener('click', openModal);
@@ -57,7 +114,7 @@ closeBtn?.addEventListener('click', closeModal);
 modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal?.classList.contains('hidden')) closeModal(); });
 
-// ===== Tabs
+// --- Tabs ---
 function activate(tab) {
   const on  = (el) => el?.classList.add('bg-white/10');
   const off = (el) => el?.classList.remove('bg-white/10');
@@ -74,10 +131,10 @@ function activate(tab) {
 tabGrafana?.addEventListener('click', () => activate('grafana'));
 tabProm?.addEventListener('click', () => activate('prom'));
 tabApp?.addEventListener('click', () => { activate('app'); fetchAppMetrics(); });
-activate('app'); // default
+activate('app'); // default tab
 
-// ===== App Metrics (no Prometheus needed)
-function makeAppTable(families){
+// --- App Metrics (no Prometheus needed) ---
+function makeAppTable(families) {
   const table = document.createElement('table');
   table.className = 'w-full text-sm';
   table.innerHTML = `
@@ -110,8 +167,8 @@ function makeAppTable(families){
   });
   return table;
 }
-async function fetchAppMetrics(){
-  if(!appStatus || !appResults) return;
+async function fetchAppMetrics() {
+  if (!appStatus || !appResults) return;
   appStatus.textContent = 'Fetching…';
   appResults.innerHTML = '';
   try {
@@ -127,8 +184,8 @@ async function fetchAppMetrics(){
 }
 appRefresh?.addEventListener('click', fetchAppMetrics);
 
-// ===== Prometheus runner (works once you wire the proxy)
-function makePromTable(result){
+// --- Prometheus (unchanged) ---
+function makePromTable(result) {
   const table = document.createElement('table');
   table.className = 'w-full text-sm';
   table.innerHTML = `
@@ -184,8 +241,8 @@ promForm?.addEventListener('submit', async (e) => {
   }
 });
 
-// ===== Snapshots
-function renderSnapshots(list){
+// --- Snapshots ---
+function renderSnapshots(list) {
   const table = document.createElement('table');
   table.className = 'w-full text-sm';
   table.innerHTML = `
@@ -200,7 +257,7 @@ function renderSnapshots(list){
     </thead>
     <tbody></tbody>`;
   const tbody = table.querySelector('tbody');
-  if (!list || !list.length){
+  if (!list || !list.length) {
     const tr = document.createElement('tr');
     tr.className = 'odd:bg-white/0 even:bg-white/5';
     tr.innerHTML = `<td colspan="5" class="px-3 py-6 text-center text-neutral-400">No snapshots yet.</td>`;
@@ -222,14 +279,14 @@ function renderSnapshots(list){
   }
   return table;
 }
-async function fetchSnapshots(){
-  if(!snapshotsStatus || !snapshotsResults) return;
+async function fetchSnapshots() {
+  if (!snapshotsStatus || !snapshotsResults) return;
   snapshotsStatus.textContent = 'Fetching…';
   snapshotsResults.innerHTML = '';
   try {
     const res = await fetch(SNAPSHOTS_ENDPOINT, { credentials: 'same-origin' });
     const ct = res.headers.get('content-type') || '';
-    if(!ct.includes('application/json')){
+    if (!ct.includes('application/json')) {
       const text = await res.text();
       throw new Error('Expected JSON from /snapshots. First bytes: ' + text.slice(0, 60));
     }
@@ -237,48 +294,18 @@ async function fetchSnapshots(){
     const list = Array.isArray(data) ? data : (data.data || data.snapshots || []);
     snapshotsStatus.textContent = `${list.length} snapshot${list.length===1?'':'s'}`;
     snapshotsResults.appendChild(renderSnapshots(list));
-  } catch (err){
+  } catch (err) {
     snapshotsStatus.textContent = `Request failed: ${err.message}`;
   }
 }
 snapshotsRefresh?.addEventListener('click', fetchSnapshots);
 
-// ===== Simple router (admin-gated Overview). Only: overview, payments, snapshots
-const ROUTES = ['overview','payments','snapshots'];
-const SECTIONS = Object.fromEntries(ROUTES.map(r => [r, document.getElementById(`route-${r}`)]));
-const NAV_LINKS = Array.from(document.querySelectorAll('#sidebar-nav .nav-link'));
+// --- Boot: fetch /auth/me first, then route ---
+(async function boot() {
+  // Optional: reduce flicker by hiding all sections until role is known
+  Object.values(SECTIONS).forEach(el => el?.classList.add('hidden'));
+  if (overviewLink) overviewLink.style.display = 'none';
 
-function showRoute(route){
-  if (route === 'overview' && CURRENT_USER.role !== 'admin') {
-    route = 'payments';
-    if (location.hash !== '#payments') history.replaceState(null, '', '#payments');
-  }
-  ROUTES.forEach(r => {
-    const el = SECTIONS[r];
-    if (!el) return;
-    if (r === route) { el.classList.remove('hidden'); el.classList.add('block'); }
-    else { el.classList.add('hidden'); el.classList.remove('block'); }
-  });
-  NAV_LINKS.forEach(a => {
-    const isActive = a.dataset.route === route;
-    a.classList.toggle('bg-white/10', isActive);
-    a.classList.toggle('ring-1', isActive);
-    a.classList.toggle('ring-white/10', isActive);
-  });
-  if (route === 'snapshots') fetchSnapshots();
-  if (route === 'overview')  fetchAppMetrics(); // keep metrics fresh
-}
-
-function initialRoute(){
-  const hash = (location.hash || '').replace('#','');
-  let target = ROUTES.includes(hash) ? hash : 'overview';
-  if (target === 'overview' && CURRENT_USER.role !== 'admin') target = 'payments';
-  const overviewLink = document.querySelector('[data-route="overview"]');
-  if (CURRENT_USER.role !== 'admin' && overviewLink) overviewLink.style.display = 'none';
-  showRoute(target);
-}
-window.addEventListener('hashchange', () => {
-  const hash = (location.hash || '').replace('#','');
-  showRoute(ROUTES.includes(hash) ? hash : 'overview');
-});
-initialRoute();
+  await fetchMe();
+  initialRoute();
+})();
