@@ -61,7 +61,7 @@ async def run_vm_script(
         else:
             target = f"{meta['vnc_host']}:{meta['vnc_port']}"  # host:port
 
-        http_port = ws.start(vmid, target, None, store)  # starts websockify; returns public port
+        http_port = ws.start(vmid, target)  # starts websockify; returns public port
         logging.info(f"[run_vm_script] Websockify on :{http_port} for VM {vmid}")
 
         store.set(vmid, {
