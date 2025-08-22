@@ -93,15 +93,18 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
             "access_token": token,
             "token_type": "bearer"
         })
-        resp.set_cookie(
-            key="access_token",
-            value=token,
-            httponly=True,
-            secure=True,
-            samesite="none", # <----- switch to lax back
-            path="/",
-            max_age=60*60*8,
-        )
+        # resp.set_cookie(
+        #     key="access_token",
+        #     value=token,
+        #     httponly=True,
+        #     secure=False,
+        #     samesite="lax", # <----- switch to lax back
+        #     path="/",
+        #     max_age=60*60*8,
+        # )
+        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
+        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
+
         return resp
     except HTTPException:
         raise
