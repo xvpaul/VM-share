@@ -27,6 +27,6 @@ VM_PROFILES = {
         "default_memory": 2048,
     },
     "custom": {
-        "base_image": Path("/Users/soledaco/Desktop/storage/{uid}.iso"),
+        "base_image": Path("/root/myapp/custom/{uid}.iso"),
     }
 }
