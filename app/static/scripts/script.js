@@ -255,7 +255,7 @@ function renderUserMenu(container) {
 
   // Logout action
   logout.addEventListener("click", async () => {
-    try { await fetch("/logout", { method: "POST", credentials: "include" }); }
+    try { await fetch("/auth/logout", { method: "POST", credentials: "include" }); }
     catch {}
     initHeaderAuth();
   });
