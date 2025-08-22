@@ -101,46 +101,20 @@ class QemuOverlayManager:
         except Exception as e:
             logging.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
-        # cmd = [
-        #     "qemu-system-x86_64",
-        #     "-enable-kvm", # <----- added to test
-        #     "-m", mem,
-        #     "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
-        #     "-nic", "user,model=virtio-net-pci",
-        #     "-vnc", f"unix:{vnc_sock}",
-        #     "-qmp", f"unix:{qmp_sock},server,nowait",
-        #     "-display", "none",
-        #     "-daemonize",
-        #     "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
-        # ]
         cmd = [
-    "qemu-system-x86_64",
-    "-machine", "type=pc,accel=kvm,kernel_irqchip=split",
-    "-cpu", "EPYC,migratable=off",              # or "qemu64"
-    "-m", str(mem),
-
-    "-drive", f"id=drv0,if=none,file={overlay},format=qcow2,cache=writeback,discard=unmap",
-    "-device", "virtio-blk-pci,drive=drv0,bootindex=0",
-
-    "-device", "virtio-net-pci,netdev=n0",
-    "-netdev", "user,id=n0",
-
-    "-vga", "none",
-    "-device", "virtio-vga",
-
-    "-vnc", f"unix:{vnc_sock}",
-    "-display", "none",
-
-    "-qmp", f"unix:{qmp_sock},server,nowait",
-    "-daemonize",
-    "-pidfile", str(pidfile),
-    "-D", "qemu.log",
-    "-d", "guest_errors",
-    "-global", "kvm-pit.lost_tick_policy=discard",
-    "-no-hpet",
-]
-
-
+            "qemu-system-x86_64",
+            "-enable-kvm", # <----- added to test
+            "-accel", "tcg,thread=multi",          # graceful fallback
+            "-m", mem,
+            "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
+            "-nic", "user,model=virtio-net-pci",
+            "-vnc", f"unix:{vnc_sock}",
+            "-qmp", f"unix:{qmp_sock},server,nowait",
+            "-display", "none",
+            "-daemonize",
+            "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
+        ]
+        
 
         logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
