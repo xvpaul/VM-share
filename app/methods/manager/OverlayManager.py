@@ -1,5 +1,5 @@
 # /app/methods/manager/OverlayManager.py
-import platform, shutil, subprocess, os, tempfile, time, json
+import platform, shutil, subprocess, os, tempfile, time, json, re, socket
 import configs.vm_profiles as vm_profiles
 import configs.log_config as logs
 import logging
@@ -32,6 +32,9 @@ except Exception as e:
 
 RUN_DIR = Path("/tmp/qemu")
 RUN_DIR.mkdir(parents=True, exist_ok=True)
+
+class OnlineSnapshotError(RuntimeError): ...
+
 
 class QemuOverlayManager:
     """
@@ -384,3 +387,150 @@ class QemuOverlayManager:
             "pid": qemu_pid,
             "started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
+    # =========================
+    #  SNAPSHOTS LOGIC
+    # =========================
+        # ---- Online snapshot helpers (QMP/HMP) ----
+    def _pidfile_path(self) -> Path:
+        return RUN_DIR / f"qemu-{self.vmid}.pid"
+
+    def _is_running(self) -> tuple[bool, int | None]:
+        pidfile = self._pidfile_path()
+        if not pidfile.exists():
+            return (False, None)
+        try:
+            pid = int(pidfile.read_text().strip())
+        except Exception:
+            return (False, None)
+        return (Path(f"/proc/{pid}").exists(), pid if Path(f"/proc/{pid}").exists() else None)
+
+    def _qmp_path(self) -> Path:
+        _, qmp = self._socket_paths(self.vmid)
+        return qmp
+
+    def _qmp_cmd(self, cmd: dict, timeout: float = 4.0) -> dict:
+        """Send a single QMP command and return its reply (dict)."""
+        qmp_sock = str(self._qmp_path())
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        try:
+            s.connect(qmp_sock)
+            _ = s.recv(65536)  # greeting
+            s.sendall(json.dumps({"execute": "qmp_capabilities"}).encode() + b"\r\n")
+            _ = s.recv(65536)
+
+            s.sendall(json.dumps(cmd).encode() + b"\r\n")
+            buf = b""
+            while True:
+                try:
+                    part = s.recv(65536)
+                    if not part:
+                        break
+                    buf += part
+                    if b"\n" in part:
+                        break
+                except socket.timeout:
+                    break
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+        # Parse last JSON line
+        for line in buf.decode(errors="ignore").splitlines()[::-1]:
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    return json.loads(line)
+                except Exception:
+                    continue
+        return {"error": {"desc": f"no QMP reply for {cmd}"}}
+
+    def _hmp(self, hmp_cmd: str, timeout: float = 4.0) -> str:
+        """Run an HMP command via QMP."""
+        resp = self._qmp_cmd(
+            {"execute": "human-monitor-command", "arguments": {"command-line": hmp_cmd}},
+            timeout=timeout,
+        )
+        if "error" in resp:
+            raise OnlineSnapshotError(resp["error"].get("desc", "HMP error"))
+        return resp.get("return", "")
+
+    _SNAP_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+    def _sanitize_snap(self, name: str) -> str:
+        if not name or not self._SNAP_RE.match(name):
+            raise ValueError("Invalid snapshot name. Use 1–64 chars: letters, digits, '.', '_', '-'")
+        return name
+
+    def _require_online(self):
+        running, _ = self._is_running()
+        if not running:
+            raise OnlineSnapshotError("VM is not running; online snapshots require a live QMP session.")
+        if not self._qmp_path().exists():
+            raise OnlineSnapshotError("QMP socket not found; ensure QEMU launched with -qmp unix:...,server,nowait")
+
+    # =========================
+    # ONLINE SNAPSHOTS ONLY
+    # =========================
+
+    def list_snapshots(self) -> dict:
+        """Return {'mode':'online','snapshots':[{'name': str, 'current': bool}]}"""
+        self._require_online()
+        out = self._hmp("info snapshots")
+        snaps = []
+        for ln in out.splitlines():
+            ln = ln.rstrip()
+            if not ln or ln.lower().startswith(("id", "tag", "none")):
+                continue
+            # Lines can start with optional "*" for current, then an ID, then TAG
+            m = re.match(r"^\s*(\*)?\s*\d+\s+([^\s]+)", ln)
+            if m:
+                snaps.append({"name": m.group(2), "current": bool(m.group(1))})
+        return {"mode": "online", "snapshots": snaps}
+
+    def create_snapshot(self, name: str, *, quiesce: bool = False, replace: bool = False) -> dict:
+        """
+        Create an online snapshot (VM + device state).
+        - quiesce=True: 'stop' CPU around save for extra consistency, then 'cont'
+        - replace=True: delete an existing snapshot with the same name first
+        """
+        self._require_online()
+        name = self._sanitize_snap(name)
+        try:
+            if replace:
+                try:
+                    self._hmp(f"delvm {name}")
+                except OnlineSnapshotError:
+                    pass
+            if quiesce:
+                self._hmp("stop")
+            self._hmp(f"savevm {name}")
+            return {"mode": "online", "name": name, "status": "created"}
+        finally:
+            if quiesce:
+                try:
+                    self._hmp("cont")
+                except OnlineSnapshotError:
+                    # if cont fails, surface it in logs but keep create result returned
+                    logging.warning("Failed to 'cont' after quiesced savevm.")
+
+    def delete_snapshot(self, name: str) -> dict:
+        """Delete an online snapshot."""
+        self._require_online()
+        name = self._sanitize_snap(name)
+        self._hmp(f"delvm {name}")
+        return {"mode": "online", "name": name, "status": "deleted"}
+
+    def revert_snapshot(self, name: str, *, pause: bool = False) -> dict:
+        """
+        Revert to an online snapshot (RAM + device state).
+        - pause=True: 'stop' before loadvm and keep paused; caller may 'cont' later.
+        """
+        self._require_online()
+        name = self._sanitize_snap(name)
+        if pause:
+            self._hmp("stop")
+        self._hmp(f"loadvm {name}")
+        return {"mode": "online", "name": name, "status": "reverted", "paused": pause}
+
