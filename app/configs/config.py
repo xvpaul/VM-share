@@ -42,6 +42,12 @@ VM_PROFILES = {
         "base_image": Path("/root/myapp/base_images/Alpine/alpine-base.qcow2"),
         "default_memory": 1024,
     },
+     "tiny": {
+        "overlay_dir": Path("/root/myapp/overlays/Tiny"),
+        "overlay_prefix": "tiny",
+        "base_image": Path("/root/myapp/base_images/Tiny/tinycore-base.qcow2"),
+        "default_memory": 1024,
+    },
     "lubuntu": {
         "overlay_dir": Path("/root/myapp/overlays/lubuntu"),
         "overlay_prefix": "lubuntu",
