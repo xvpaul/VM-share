@@ -1,40 +1,32 @@
-version: "3.9"
+version: "3.8"
 
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: appdb
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: supersecret
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-    networks: [backend]
-
   app:
-    build: .
-    depends_on:
-      db:
-        condition: service_healthy
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vmshare_app
+    restart: unless-stopped
+    working_dir: /VM_share/app
+    environment:
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    # publish the SAME port your server expects
     ports:
-      - "8000:8000"            # FastAPI
-      - "6080:6080"            # novnc_proxy your code starts
-      - "6900-6999:6900-6999"  # per-VM websockify your code starts
+      - "8000:8000"
+    # mount your tree 1:1 so ALL subfolders/files are there
     volumes:
-      # Match vm_profiles exactly
-      - ./base_images/Alpine_Linux:/root/myapp/base_images/Alpine_Linux:ro
-      - ./base_images/Tiny:/root/myapp/base_images/Tiny:ro
-      - ./overlays/Alpine_Linux:/root/myapp/overlays/Alpine_Linux
-      - ./overlays/Tiny:/root/myapp/overlays/Tiny
-    networks: [backend]
-
-volumes:
-  db_data:
+      - ${HOST_ROOT}/VM_share:/VM_share
+      - ${HOST_ROOT}/base_images:/base_images:ro
+      - ${HOST_ROOT}/iso:/iso:ro
+      - ${HOST_ROOT}/cloud:/cloud
+      - ${HOST_ROOT}/logs:/logs
+      - ${HOST_ROOT}/custom:/custom
+      - ${HOST_ROOT}/overlays:/overlays
+    # optional hardening you can enable later:
+    # read_only: true
+    # tmpfs: ["/tmp", "/run"]
+    # cap_drop: ["ALL"]
 
 networks:
-  backend:
+  default:
+    name: vmshare_net
