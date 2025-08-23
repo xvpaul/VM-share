@@ -1,7 +1,25 @@
 # /app/main.py
 from contextlib import asynccontextmanager
 import os, asyncio, logging
+from pathlib import Path
 
+# ---- load .env FIRST (before importing modules that read env) ----
+from dotenv import load_dotenv
+ENV_PATH = (Path(__file__).parent / "configs" / ".env").resolve()
+load_dotenv(ENV_PATH)
+logging.info("main.py: loaded .env from %s (exists=%s)", ENV_PATH, ENV_PATH.exists())
+
+# ---- multiprocess dir guard BEFORE importing metrics module ----
+mp = os.getenv("PROMETHEUS_MULTIPROC_DIR")
+if mp:
+    os.makedirs(mp, exist_ok=True)
+    for f in os.listdir(mp):
+        try:
+            os.remove(os.path.join(mp, f))
+        except Exception:
+            pass
+
+# ---- now import the rest ----
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -14,35 +32,19 @@ from routers.post import router as post_router
 
 from observability.grafana_proxy import router as grafana_router
 
-# KEEP: your unified metrics module (HTTP middleware + registry + collector)
+# unified metrics (HTTP middleware + registry + collector)
 from observability.metrics import (
     router as metrics_router,
     metrics_collector,
-    install_http_metrics,   # <-- use this one
-    should_run_samplers,    # <-- and this toggle
+    install_http_metrics,
+    should_run_samplers,
 )
 
-# DB metrics (safe to keep)
 from observability.db_metrics import init_db_metrics
+from observability.utils_observability import resource_watchdog
 
 from methods.manager.SessionManager import get_session_store
 from utils import cleanup_vm
-
-# (dotenv loading as you already had)
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv())
-#guard
-mp = os.getenv("PROMETHEUS_MULTIPROC_DIR")
-if mp:
-    os.makedirs(mp, exist_ok=True)
-    # clear old shard files (safe at process start)
-    for f in os.listdir(mp):
-        try:
-            os.remove(os.path.join(mp, f))
-        except Exception:
-            pass
-
-from observability.utils_observability import resource_watchdog
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -69,7 +71,7 @@ async def lifespan(app: FastAPI):
         store = get_session_store()
         try:
             sessions = store.items()
-            logging.info(f"main.py: found {len(sessions)} sessions to clean")
+            logging.info("main.py: found %d sessions to clean", len(sessions))
         except Exception:
             sessions = []
             logging.exception("main.py: failed to enumerate sessions")
@@ -78,16 +80,16 @@ async def lifespan(app: FastAPI):
             try:
                 cleanup_vm(vmid, store)
             except Exception:
-                logging.exception(f"cleanup_vm failed for {vmid}")
+                logging.exception("cleanup_vm failed for %s", vmid)
             try:
                 store.delete(vmid)
             except Exception:
-                logging.exception(f"store.delete failed for {vmid}")
+                logging.exception("store.delete failed for %s", vmid)
 
 app = FastAPI(lifespan=lifespan)
 
-# ---- HTTP metrics (from observability.metrics) ----
-install_http_metrics(app)   # <-- keep this
+# ---- HTTP metrics middleware ----
+install_http_metrics(app)
 
 # ---- DB metrics ----
 try:

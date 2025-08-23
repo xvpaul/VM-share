@@ -1,3 +1,4 @@
+# /app/observability/grafana_proxy.py
 import os
 import time
 import logging
@@ -5,12 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 import httpx
 
 router = APIRouter()
-
-GRAFANA_BASE  = os.getenv("GRAFANA_BASE", "http://localhost:3000").rstrip("/")
-GRAFANA_TOKEN = os.getenv("GRAFANA_TOKEN", "")
-
-# Log base once (never log the token)
-logging.info("grafana_proxy: configured base=%s", GRAFANA_BASE)
+logging.info("grafana_proxy: module loaded")
 
 @router.get("/grafana/panel.png")
 async def grafana_panel_png(
@@ -24,12 +20,14 @@ async def grafana_panel_png(
     orgId: int | None = Query(None, description="Optional Grafana org id"),
     tz: str | None = Query(None),
 ):
-    if not GRAFANA_TOKEN:
+    base  = os.getenv("GRAFANA_BASE", "http://localhost:3000").rstrip("/")
+    token = os.getenv("GRAFANA_TOKEN", "")
+
+    if not token:
         logging.error("grafana_proxy: GRAFANA_TOKEN is not set")
         raise HTTPException(500, "GRAFANA_TOKEN not configured on server")
 
-    # Grafana render endpoint requires a slug after UID; '_' is fine
-    url = f"{GRAFANA_BASE}/render/d-solo/{uid}/_"
+    url = f"{base}/render/d-solo/{uid}/_"  # slug can be anything
     params = {
         "panelId": panelId,
         "from": _from,
@@ -44,12 +42,12 @@ async def grafana_panel_png(
         params["tz"] = tz
 
     logging.info(
-        "grafana_proxy: render request uid=%s panelId=%s from=%s to=%s w=%s h=%s theme=%s orgId=%s tz=%s",
-        uid, panelId, _from, to, width, height, theme, orgId, tz
+        "grafana_proxy: render request base=%s uid=%s panelId=%s from=%s to=%s w=%s h=%s theme=%s orgId=%s tz=%s",
+        base, uid, panelId, _from, to, width, height, theme, orgId, tz
     )
 
     headers = {
-        "Authorization": f"Bearer {GRAFANA_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Accept": "image/png,*/*;q=0.8",
     }
 
@@ -59,7 +57,7 @@ async def grafana_panel_png(
             r = await client.get(url, params=params, headers=headers)
     except httpx.RequestError as e:
         dt = (time.perf_counter() - t0) * 1000
-        logging.exception("grafana_proxy: unreachable base=%s dur_ms=%.1f err=%s", GRAFANA_BASE, dt, e)
+        logging.exception("grafana_proxy: unreachable base=%s dur_ms=%.1f err=%s", base, dt, e)
         raise HTTPException(502, f"Grafana unreachable: {e}") from e
 
     dt = (time.perf_counter() - t0) * 1000
@@ -72,7 +70,6 @@ async def grafana_panel_png(
             "grafana_proxy: render failed status=%s ct=%s bytes=%s dur_ms=%.1f url=%s params=%s snippet=%r",
             r.status_code, ct, size, dt, url, params, snippet
         )
-        # Normalize to 502 for clients but include upstream status + snippet
         raise HTTPException(502, f"Grafana render failed {r.status_code}: {snippet}")
 
     logging.info(
