@@ -21,7 +21,7 @@ async def grafana_panel_png(
     tz: str | None = Query(None),
 ):
     base  = os.getenv("GRAFANA_BASE", "http://localhost:3000").rstrip("/")
-    token = os.getenv("GRAFANA_TOKEN", "")
+    token = os.getenv("GRAFANA_TOKEN", "glsa_7nvHWsRynyHsg71ITPmHs8vWC1uIqVZp_20231f01")
 
     if not token:
         logging.error("grafana_proxy: GRAFANA_TOKEN is not set")
