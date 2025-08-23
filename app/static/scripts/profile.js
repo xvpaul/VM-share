@@ -181,9 +181,9 @@ const GRAFANA_PROXY = '/grafana/panel.png';
 
 // Define which panels to show (dashboard UID + panel IDs)
 const GRAFANA_PANELS = [
-  { uid: 'yourDashUID', panelId: 2,  title: 'Request rate (rps, 5m)' },
-  { uid: 'yourDashUID', panelId: 4,  title: '95th latency (ms)' },
-  { uid: 'yourDashUID', panelId: 12, title: 'Active VMs / user' },
+  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 4,  title: 'Request rate (rps, 1m)' },
+  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 2,  title: 'User-count' },
+  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 1, title: 'Active-sessions(3h)' },
 ];
 
 // Default time range for PNG renders
