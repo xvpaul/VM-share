@@ -3,6 +3,7 @@
 // 52357B
 // 210F37
 // FFB200
+// FFD93D
 
 particlesJS("particles-js", {
     particles: {
@@ -14,13 +15,13 @@ particlesJS("particles-js", {
             }
         },
         color: {
-            value: "#52357B"
+            value: "#FFD93D"
         },
         shape: {
             type: "circle",
             stroke: {
                 width: 0,
-                color: "#52357B"
+                color: "#FFD93D"
             },
             polygon: {
                 nb_sides: 5
@@ -54,7 +55,7 @@ particlesJS("particles-js", {
         line_linked: {
             enable: true,
             distance: 200,
-            color: "#52357B",
+            color: "#FFD93D",
             opacity: 1,
             width: 1
         },

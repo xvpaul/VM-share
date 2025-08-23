@@ -205,13 +205,39 @@ def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-def logout_user(user: User = Depends(get_current_user), store: SessionStore = Depends(get_session_store)):
-    logging.info("VM_share/app/routers/auth.py: Logging out user, deleting auth cookie and terminating sessions...")
+def logout_user(
+    user = Depends(get_current_user),
+    store = Depends(get_session_store),
+):
+    logging.info("Logging out user %s: deleting auth cookie and terminating sessions...", getattr(user, "id", "?"))
+
     resp = JSONResponse({"message": "Logged out"})
-    resp.delete_cookie("access_token", path="/")
-    vmid = store.get_running_by_user(user.id)["vmid"]
-    logging.info(f"VM_share/app/routers/auth.py: terminating {vmid} ...")
-    cleanup_vm(vmid, store)
+    try:
+        resp.delete_cookie("access_token", path="/")
+    except Exception:
+        logging.exception("Failed to delete access_token cookie for user %s", getattr(user, "id", "?"))
+
+    vmid = None
+    try:
+        sess = store.get_running_by_user(user.id) 
+        if isinstance(sess, dict):
+            vmid = sess.get("vmid")
+    except Exception:
+        logging.exception("get_running_by_user failed for user %s", user.id)
+
+    if vmid:
+        logging.info("Terminating VM %s for user %s ...", vmid, user.id)
+        try:
+            cleanup_vm(vmid, store)
+        except Exception:
+            logging.exception("cleanup_vm failed for vmid=%s (user=%s)", vmid, user.id)
+        try:
+            store.delete(vmid)
+        except Exception:
+            logging.exception("store.delete failed for vmid=%s", vmid)
+    else:
+        logging.info("Logout: no active VM for user %s (nothing to terminate).", user.id)
+
     return resp
 
 @router.get("/me")
