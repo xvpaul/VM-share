@@ -363,15 +363,16 @@ promForm?.addEventListener('submit', async (e) => {
 async function runSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
-    // Prefer filename-like identifiers, fall back to id/path
     const snapshotId = s.name || s.id || s.path || s.file;
     if (!snapshotId) throw new Error('No snapshot identifier');
+
+    const osType = (typeof currentOsType === 'string' && currentOsType) ? currentOsType : 'unknown';
 
     const res = await fetch(RUN_VM_ENDPOINT, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ snapshot: snapshotId })
+      body: JSON.stringify({ os_type: osType, snapshot: snapshotId })
     });
 
     let msg = res.ok ? 'VM starting…' : 'Failed to start VM';
@@ -386,7 +387,6 @@ async function runSnapshot(s, btn) {
         if (t) msg = t;
       }
     } catch {}
-
     toast(msg, res.ok ? 'ok' : 'err');
     setStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
   } catch (e) {
