@@ -358,43 +358,6 @@ promForm?.addEventListener('submit', async (e) => {
 });
 
 // --- Snapshots ---
-// Helper to start a VM from a snapshot entry
-async function runSnapshot(s, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
-  try {
-    const snapshotId = s.name || s.id || s.path || s.file; // prefer filename
-    if (!snapshotId) throw new Error('No snapshot identifier');
-
-    const res = await fetch(RUN_VM_ENDPOINT, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ snapshot: snapshotId })
-    });
-
-    let msg = res.ok ? 'VM starting…' : 'Failed to start VM';
-    try {
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        const data = await res.json();
-        const id = data.id || data.name || data.snapshot || '';
-        if (res.ok && id) msg = `VM starting from ${id}…`;
-      } else {
-        const t = (await res.text()).trim();
-        if (t) msg = t;
-      }
-    } catch {}
-    toast(msg, res.ok ? 'ok' : 'err');
-    setStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
-  } catch (e) {
-    toast(e.message || 'Start failed', 'err');
-    setStatus('Error', 'err');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
-  }
-}
-
-// --- Snapshots ---
 function renderSnapshots(list) {
   const table = document.createElement('table');
   table.className = 'w-full text-sm';
@@ -406,65 +369,51 @@ function renderSnapshots(list) {
         <th class="text-left px-3 py-2">Size</th>
         <th class="text-left px-3 py-2">Created</th>
         <th class="text-left px-3 py-2">Notes</th>
-        <th class="text-left px-3 py-2">Run</th>
       </tr>
     </thead>
     <tbody></tbody>`;
   const tbody = table.querySelector('tbody');
-
   if (!list || !list.length) {
     const tr = document.createElement('tr');
     tr.className = 'odd:bg-white/0 even:bg-white/5';
-    tr.innerHTML = `<td colspan="6" class="px-3 py-6 text-center text-neutral-400">No snapshots yet.</td>`;
+    tr.innerHTML = `<td colspan="5" class="px-3 py-6 text-center text-neutral-400">No snapshots yet.</td>`;
     tbody.appendChild(tr);
-    return table;
+  } else {
+    list.forEach(s => {
+      const tr = document.createElement('tr');
+      tr.className = 'odd:bg-white/0 even:bg-white/5';
+      const created = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
+      const size = s.sizeBytes != null ? `${(s.sizeBytes/1024/1024).toFixed(1)} MB` : (s.size || '—');
+      tr.innerHTML = `
+        <td class="px-3 py-2 whitespace-nowrap">${s.name || s.id || '—'}</td>
+        <td class="px-3 py-2">${s.vm || s.instance || '—'}</td>
+        <td class="px-3 py-2">${size}</td>
+        <td class="px-3 py-2">${created}</td>
+        <td class="px-3 py-2 text-neutral-300">${s.notes || '—'}</td>`;
+      tbody.appendChild(tr);
+    });
   }
-
-  list.forEach(s => {
-    const tr = document.createElement('tr');
-    tr.className = 'odd:bg-white/0 even:bg-white/5';
-
-    const name = s.name || s.id || '—';
-    const vm   = s.vm || s.instance || s.vmid || '—';
-
-    // size: prefer bytes -> MB, else string fallback
-    let sizeStr = '—';
-    if (typeof s.sizeBytes === 'number') {
-      sizeStr = `${(s.sizeBytes / 1024 / 1024).toFixed(1)} MB`;
-    } else if (typeof s.size_mb === 'number') {
-      sizeStr = `${s.size_mb.toFixed(1)} MB`;
-    } else if (s.size) {
-      sizeStr = s.size;
-    }
-
-    // created: support createdAt or modified (ISO)
-    const createdISO = s.createdAt || s.modified || '';
-    const createdStr = createdISO ? new Date(createdISO).toLocaleString() : '—';
-
-    tr.innerHTML = `
-      <td class="px-3 py-2 whitespace-nowrap">${name}</td>
-      <td class="px-3 py-2">${vm}</td>
-      <td class="px-3 py-2">${sizeStr}</td>
-      <td class="px-3 py-2">${createdStr}</td>
-      <td class="px-3 py-2 text-neutral-300">${s.notes || '—'}</td>
-      <td class="px-3 py-2"></td>
-    `;
-
-    // Add Run button with handler
-    const runTd = tr.lastElementChild;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'px-3 py-1 rounded bg-white/10 hover:bg-white/20';
-    btn.textContent = 'Run';
-    btn.addEventListener('click', () => runSnapshot(s, btn));
-    runTd.appendChild(btn);
-
-    tbody.appendChild(tr);
-  });
-
   return table;
 }
-
+async function fetchSnapshots() {
+  if (!snapshotsStatus || !snapshotsResults) return;
+  snapshotsStatus.textContent = 'Fetching…';
+  snapshotsResults.innerHTML = '';
+  try {
+    const res = await fetch(SNAPSHOTS_ENDPOINT, { credentials: 'same-origin' });
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text();
+      throw new Error('Expected JSON from /snapshots. First bytes: ' + text.slice(0, 60));
+    }
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.data || data.snapshots || []);
+    snapshotsStatus.textContent = `${list.length} snapshot${list.length===1?'':'s'}`;
+    snapshotsResults.appendChild(renderSnapshots(list));
+  } catch (err) {
+    snapshotsStatus.textContent = `Request failed: ${err.message}`;
+  }
+}
 snapshotsRefresh?.addEventListener('click', fetchSnapshots);
 
 // --- Boot: fetch /auth/me first, then route ---
