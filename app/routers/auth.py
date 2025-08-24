@@ -232,12 +232,10 @@ async def me(
         os_type = sess.get("os_type") or sess.get("os") or "Virtual Machine"
         vmid = sess.get("vmid")
         logger.info("[user_info] user=%s vmid=%s os=%s", user.id, vmid, os_type)
-        # return both keys: frontend reads `os`, backend can use `os_type`
-        return {"os": os_type, "os_type": os_type, "vmid": vmid}
+        return {"os_type": os_type, "vmid": vmid}
     except Exception as e:
         logger.exception("[user_info] failed for user=%s", user.id)
-        # keep it simple and always JSON
-        return {"os": "Virtual Machine", "os_type": None, "vmid": None}
+        return {"os_type": None, "vmid": None}
 
 
 # @router.post("/token-json")

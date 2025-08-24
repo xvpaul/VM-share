@@ -1,12 +1,13 @@
 # /app/routers/vm.py
 import secrets, logging, os
+from datetime import datetime, timezone
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from configs import server_config, vm_profiles
+from configs import server_config, vm_profiles, config
 from methods.manager.OverlayManager import QemuOverlayManager, OnlineSnapshotError
 from methods.database.database import get_db
 from methods.auth.auth import get_current_user
@@ -169,7 +170,7 @@ async def create_snapshot(
 ):
     """
     Create a disk-only snapshot of a running VM's overlay.
-    Snapshot name: {os_type}__{vmid}__{user_id}
+    Snapshot name: {user.id}__{os_type}__{vmid}
     """
     vmid = None
     logger.info("[snapshot] started")
@@ -228,10 +229,30 @@ async def run_snapshot(
 
 
 @router.get("/get_user_snapshots")
-async def get_user_snapshots(
-    request: RunScriptRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    store: SessionStore = Depends(get_session_store),
-    ws: WebsockifyService = Depends(get_websockify_service),
-): ...
+async def get_user_snapshots(user: User = Depends(get_current_user)):
+    try:
+        items = []
+        for p in config.SNAPSHOTS_DIR.glob(f"{user.id}__*"):
+            if not p.is_file():
+                continue
+            stat = p.stat()
+            stem = p.stem  # name without extension
+            parts = stem.split("__", 2)
+            os_type = parts[1] if len(parts) > 1 else None
+            vmid    = parts[2] if len(parts) > 2 else None
+            items.append({
+                "name": p.name,  # keep original filename (with extension if any)
+                "os_type": os_type,
+                "vmid": vmid,
+                "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+                "path": str(p),
+            })
+
+        # newest first
+        items.sort(key=lambda x: x["modified"], reverse=True)
+        logger.info("[snapshots] user=%s count=%d", user.id, len(items))
+        return items
+    except Exception:
+        logger.exception("[snapshots] list failed user=%s", user.id)
+        return []
