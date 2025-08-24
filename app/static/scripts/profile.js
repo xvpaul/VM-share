@@ -361,16 +361,16 @@ promForm?.addEventListener('submit', async (e) => {
 // Helper: extract os_type (2nd segment) from "{user}__{os_type}__{vmid}[.ext]"
 function extractOsTypeFromSnapshotId(id) {
   if (!id) return 'unknown';
-  const base = String(id).split(/[\\/]/).pop();     // strip any path
-  const parts = base.split('__');                   // ["user","os_type","vmid.ext"]
-  return parts.length >= 3 && parts[1] ? parts[1] : (typeof currentOsType === 'string' && currentOsType) ? currentOsType : 'unknown';
+  const base = String(id).split(/[\\/]/).pop();
+  const parts = base.split('__');
+  return (parts.length >= 3 && parts[1]) ? parts[1] : 'unknown';
 }
 
-// Start VM from a snapshot entry using RUN_VM_ENDPOINT
+// Start VM from a snapshot entry using RUN_VM_ENDPOINT, then redirect
 async function runSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
-    const snapshotId = s.name || s.id || s.path || s.file; // prefer filename
+    const snapshotId = s.name || s.id || s.path || s.file;
     if (!snapshotId) throw new Error('No snapshot identifier');
 
     const osType = extractOsTypeFromSnapshotId(snapshotId);
@@ -382,21 +382,42 @@ async function runSnapshot(s, btn) {
       body: JSON.stringify({ os_type: osType, snapshot: snapshotId })
     });
 
+    // Try to parse a redirect URL (JSON > Location header > text body)
+    let redirectUrl = null;
     let msg = res.ok ? 'VM starting…' : 'Failed to start VM';
+
     try {
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
         const data = await res.json();
+        if (data && typeof data.redirect === 'string') redirectUrl = data.redirect;
         const id = data.id || data.name || data.snapshot || '';
-        if (res.ok && id) msg = `VM starting from ${id}…`;
+        if (res.ok && id && !redirectUrl) msg = `VM starting from ${id}…`;
       } else {
-        const t = (await res.text()).trim();
-        if (t) msg = t;
+        // Fallback: header or first URL-like token in text
+        redirectUrl = res.headers.get('Location');
+        if (!redirectUrl) {
+          const text = (await res.text()).trim();
+          const m = text.match(/https?:\/\/\S+/);
+          if (m) redirectUrl = m[0];
+          if (text && !redirectUrl) msg = text;
+        }
       }
-    } catch {}
+    } catch {
+      // ignore parse errors
+    }
 
+    if (res.ok && redirectUrl) {
+      toast('Opening console…', 'ok');
+      // Redirect and stop further UI updates
+      window.location.assign(redirectUrl);
+      return;
+    }
+
+    // No redirect found or request failed
     toast(msg, res.ok ? 'ok' : 'err');
     setStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
+
   } catch (e) {
     toast(e.message || 'Start failed', 'err');
     setStatus('Error', 'err');
