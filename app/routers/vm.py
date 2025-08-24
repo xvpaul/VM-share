@@ -250,7 +250,7 @@ async def run_snapshot(
         # Resolve snapshot path (accept absolute or basename)
         snap_path = Path(snap_name)
         if not snap_path.is_absolute():
-            snap_path = Path(SNAPSHOTS_PATH) / snap_path.name
+            snap_path = Path(config.SNAPSHOTS_PATH) / snap_path.name
         if not snap_path.exists():
             raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
 
