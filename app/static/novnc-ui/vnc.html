@@ -227,6 +227,7 @@
         btnShot.textContent = 'Snapshotting…';
         try {
           // Ensure we have some os_type; server validates too
+          console.log(currentOsType)
           const osType = currentOsType || 'unknown';
           const res = await fetch('/vm/snapshot', {
             method: 'POST',
