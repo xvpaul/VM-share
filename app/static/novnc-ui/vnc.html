@@ -99,142 +99,150 @@
 
   <!-- noVNC core library you copied -->
   <script type="module">
-    import RFB from './core/rfb.js';
+  import RFB from './core/rfb.js';
 
-    // —— Helpers ——
-    const $ = (sel) => document.querySelector(sel);
-    function setStatus(text, level='info'){
-      const dot = $('#dot');
-      $('#status-text').textContent = text;
-      dot.classList.remove('ok','warn','err');
-      if (level==='ok') dot.classList.add('ok');
-      else if (level==='warn') dot.classList.add('warn');
-      else if (level==='err') dot.classList.add('err');
+// —— Helpers ——
+function setStatus(text, level='info'){
+  const dot = document.querySelector('#dot');
+  document.querySelector('#status-text').textContent = text;
+  dot.classList.remove('ok','warn','err');
+  if (level==='ok') dot.classList.add('ok');
+  else if (level==='warn') dot.classList.add('warn');
+  else if (level==='err') dot.classList.add('err');
+}
+
+let toastTimer;
+function toast(text, level='ok'){
+  const t = document.querySelector('#toast');
+  const tt = document.querySelector('#toast-text');
+  const dot = t.querySelector('.dot');
+  tt.textContent = text;
+  dot.className = 'dot ' + (level==='ok' ? 'ok' : level==='err' ? 'err' : 'warn');
+  t.style.display = 'flex';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2600);
+}
+
+// —— Dynamic title/OS from /user_info ——
+async function loadOS(){
+  try {
+    const res = await fetch('/user_info', { credentials: 'same-origin' });
+    const ct = res.headers.get('content-type') || '';
+    let os = '';
+    if (ct.includes('application/json')){
+      const j = await res.json();
+      os = j.os || j.OS || j.distro || j.name || '';
+    } else {
+      os = (await res.text()).trim();
     }
-    let toastTimer;
-    function toast(text, level='ok'){
-      const t = $('#toast');
-      const tt = $('#toast-text');
-      const dot = t.querySelector('.dot');
-      tt.textContent = text;
-      dot.className = 'dot ' + (level==='ok' ? 'ok' : level==='err' ? 'err' : 'warn');
-      t.style.display = 'flex';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2600);
-    }
+    if (!os) os = 'Virtual Machine';
+    document.title = os + ' — Console';
+    document.querySelector('#vm-name').textContent = os;
+    document.querySelector('#vm-sub').textContent = 'Remote console via noVNC';
+  } catch {
+    document.title = 'Console';
+    document.querySelector('#vm-name').textContent = 'Console';
+    document.querySelector('#vm-sub').textContent = 'Remote console via noVNC';
+  }
+}
+loadOS();
 
-    // —— Dynamic title/OS from /user_info ——
-    async function loadOS(){
-      try {
-        const res = await fetch('/user_info', { credentials: 'same-origin' });
-        const ct = res.headers.get('content-type') || '';
-        let os = '';
-        if (ct.includes('application/json')){
-          const j = await res.json();
-          os = j.os || j.OS || j.distro || j.name || '';
-        } else {
-          os = (await res.text()).trim();
-        }
-        if (!os) os = 'Virtual Machine';
-        document.title = os + ' — Console';
-        $('#vm-name').textContent = os;
-        $('#vm-sub').textContent = 'Remote console via noVNC';
-      } catch {
-        document.title = 'Console';
-        $('#vm-name').textContent = 'Console';
-        $('#vm-sub').textContent = 'Remote console via noVNC';
+// —— Build websocket URL ——
+const urlParams = new URLSearchParams(window.location.search);
+const host = urlParams.get('host') || window.location.hostname || 'localhost';
+const port = urlParams.get('port') || window.location.port || (location.protocol==='https:' ? '443' : '80');
+const path = urlParams.get('path') || 'websockify';
+const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+const wsUrl = `${proto}://${host}:${port}/${path}`;
+
+// —— Setup RFB ——
+const screen = document.getElementById('screen');
+const rfb = new RFB(screen, wsUrl, { credentials: {} });
+rfb.viewOnly = false;
+rfb.scaleViewport = true;
+rfb.resizeSession = true;
+
+rfb.addEventListener('connect', () => setStatus('Connected', 'ok'));
+rfb.addEventListener('disconnect', (e) => {
+  const clean = !e || !e.detail || e.detail.clean;
+  setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
+});
+
+// —— Controls ——
+document.querySelector('#btn-full').addEventListener('click', async () => {
+  const el = document.documentElement;
+  try {
+    if (!document.fullscreenElement) await el.requestFullscreen();
+    else await document.exitFullscreen();
+  } catch {}
+});
+
+document.querySelector('#btn-disc').addEventListener('click', async () => {
+  setStatus('Disconnecting…', 'warn');
+  const btn = document.querySelector('#btn-disc');
+  btn.disabled = true;
+  try {
+    // Prefer POST; fall back to GET if server doesn’t accept it
+    let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
+    if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
+  } catch {}
+  try { rfb.disconnect(); } catch {}
+  toast('Disconnected', 'warn');
+  btn.disabled = false;
+});
+
+document.querySelector('#btn-shot').addEventListener('click', async () => {
+  const b = document.querySelector('#btn-shot');
+  b.disabled = true; 
+  b.textContent = 'Snapshotting…';
+  try {
+    const res = await fetch('/vm/snapshot', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ os_type: currentOsType })
+    });
+
+    let msg = res.ok ? 'Snapshot created' : 'Snapshot failed';
+    try {
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')){
+        const data = await res.json();
+        const id = data.id || data.name || data.snapshot || '';
+        if (id) msg = `Snapshot ${id} created`;
+      } else {
+        const t = (await res.text()).trim();
+        if (t) msg = t;
       }
-    }
-    loadOS();
+    } catch {}
 
-    // —— Build websocket URL ——
-    const urlParams = new URLSearchParams(window.location.search);
-    const host = urlParams.get('host') || window.location.hostname || 'localhost';
-    const port = urlParams.get('port') || window.location.port || (location.protocol==='https:' ? '443' : '80');
-    const path = urlParams.get('path') || 'websockify';
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${host}:${port}/${path}`;
+    toast(msg, res.ok ? 'ok' : 'err');
+    setStatus('Connected', res.ok ? 'ok' : 'err');
+  } catch (e) {
+    toast('Snapshot request failed', 'err');
+    setStatus('Connected', 'err');
+  } finally {
+    b.disabled = false;
+    b.innerHTML = `
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 7h4l2-2h4l2 2h4v12H4z"/>
+        <circle cx="12" cy="13" r="3"/>
+      </svg> Snapshot
+    `;
+  }
+});
 
-    // —— Setup RFB ——
-    const screen = document.getElementById('screen');
-    const rfb = new RFB(screen, wsUrl, { credentials: {} });
-    rfb.viewOnly = false;
-    rfb.scaleViewport = true;
-    rfb.resizeSession = true;
+// —— Hotkeys ——
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'f' || (e.key === 'F' && !e.ctrlKey && !e.metaKey)) {
+    e.preventDefault(); 
+    document.querySelector('#btn-full').click();
+  }
+});
 
-    rfb.addEventListener('connect', () => setStatus('Connected', 'ok'));
-    rfb.addEventListener('disconnect', (e) => {
-      const clean = !e || !e.detail || e.detail.clean;
-      setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
-    });
+// Initial status
+setStatus('Connecting…');
 
-    // —— Controls ——
-    $('#btn-full').addEventListener('click', async () => {
-      const el = document.documentElement;
-      try {
-        if (!document.fullscreenElement) await el.requestFullscreen();
-        else await document.exitFullscreen();
-      } catch {}
-    });
-
-    $('#btn-disc').addEventListener('click', async () => {
-      setStatus('Disconnecting…', 'warn');
-      $('#btn-disc').disabled = true;
-      try {
-        // Prefer POST; fall back to GET if server doesn’t accept it
-        let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
-        if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
-      } catch {}
-      try { rfb.disconnect(); } catch {}
-      toast('Disconnected', 'warn');
-      $('#btn-disc').disabled = false;
-    });
-
-    $('#btn-shot').addEventListener('click', async () => {
-      const b = $('#btn-shot');
-      b.disabled = true; b.textContent = 'Snapshotting…';
-      try {
-        // Prefer POST; fall back to GET
-        alert(body)
-        let res = fetch('/vm/snapshot', {
-                  method: 'POST',
-                  credentials: 'same-origin',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ os_type: currentOsType }) // supply from frontend
-                });
-        if (!res.ok) res = await fetch('/vm/snapshot', { credentials: 'same-origin' });
-        const ok = res.ok;
-        let msg = 'Snapshot created';
-        try {
-          const ct = res.headers.get('content-type') || '';
-          if (ct.includes('application/json')){
-            const data = await res.json();
-            const id = data.id || data.name || data.snapshot || '';
-            if (id) msg = `Snapshot ${id} created`;
-          } else {
-            const t = (await res.text()).trim();
-            if (t) msg = t;
-          }
-        } catch {}
-        toast(ok ? msg : 'Snapshot request sent');
-        setStatus('Connected', 'ok');
-      } catch (e) {
-        toast('Snapshot failed', 'err');
-        setStatus('Connected', 'ok');
-      } finally {
-        b.disabled = false; b.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3"/></svg> Snapshot';
-      }
-    });
-
-    // —— Hotkeys ——
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'f' || (e.key === 'F' && !e.ctrlKey && !e.metaKey)) {
-        e.preventDefault(); $('#btn-full').click();
-      }
-    });
-
-    // Initial status
-    setStatus('Connecting…');
   </script>
 </body>
 </html>
