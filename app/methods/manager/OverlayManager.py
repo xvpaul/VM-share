@@ -369,33 +369,111 @@ class QemuOverlayManager:
    
     def create_disk_snapshot(self, name: str) -> Path:
         """
-        Make an *internal* qcow2 snapshot on the active overlay, then export it
-        to a standalone qcow2 file: {user_id}__{os_type}__{vmid}.qcow2
+        Live disk-only snapshot (when VM is running) using QMP drive-backup.
+        Falls back to offline full copy if QMP socket is not present.
+        Output: {user_id}__{os_type}__{vmid}.qcow2 in SNAPSHOTS_PATH.
         """
         overlay = self.overlay_path()
         if not overlay.exists():
             raise FileNotFoundError(f"Overlay not found: {overlay}")
 
-        # 1) internal snapshot
+        out = Path(SNAPSHOTS_PATH) / f"{self.user_id}__{self.os_type}__{self.vmid}.qcow2"
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        # overwrite is fine (one latest snapshot per VM by filename)
+        if out.exists():
+            try:
+                out.unlink()
+            except Exception as e:
+                raise OnlineSnapshotError(f"Failed to remove existing snapshot file: {out} ({e})")
+
+        # If QMP socket exists, do live backup (no locking issues)
+        _, qmp_sock = self._socket_paths(self.vmid)
+        if qmp_sock.exists():
+            def _qmp_send(payload: dict, timeout: float = 10.0) -> dict:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                    s.settimeout(timeout)
+                    s.connect(str(qmp_sock))
+                    # greeting
+                    _ = json.loads(s.recv(4096).decode(errors="ignore") or "{}")
+                    # enable capabilities
+                    s.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\n").encode())
+                    _ = json.loads(s.recv(4096).decode(errors="ignore") or "{}")
+                    # command
+                    s.sendall((json.dumps(payload) + "\n").encode())
+                    resp = s.recv(65536).decode(errors="ignore") or "{}"
+                    try:
+                        return json.loads(resp)
+                    except Exception:
+                        # Some cmds may not immediately reply; query state instead
+                        return {}
+
+            # Find the right device name from query-block (match overlay path)
+            qb = _qmp_send({"execute": "query-block"})
+            devices = qb.get("return", []) if isinstance(qb, dict) else []
+            dev_name = None
+            ovl_str = str(overlay)
+            for d in devices:
+                # QEMU returns entries like {"device":"virtio0","inserted":{"file":"/path.qcow2", ...}}
+                ins = d.get("inserted") or {}
+                cand = ins.get("file") or ins.get("filename") or ""
+                # Some versions nest filename deeper
+                if not cand and isinstance(ins.get("image"), dict):
+                    cand = ins["image"].get("filename") or ""
+                if cand and os.path.abspath(cand) == os.path.abspath(ovl_str):
+                    dev_name = d.get("device")
+                    break
+            if not dev_name and devices:
+                # Fallback: first writable device
+                dev_name = next((d.get("device") for d in devices if d.get("device")), None)
+            if not dev_name:
+                raise OnlineSnapshotError("Unable to determine block device for drive-backup")
+
+            job_id = f"backup-{self.vmid}-{int(time.time())}"
+            start = _qmp_send({
+                "execute": "drive-backup",
+                "arguments": {
+                    "device": dev_name,
+                    "job-id": job_id,
+                    "target": str(out),
+                    "format": "qcow2",
+                    "sync": "full",
+                    "auto-finalize": True,
+                    "auto-dismiss": True
+                }
+            })
+            # If QMP returned an error structure
+            if isinstance(start, dict) and "error" in start:
+                raise OnlineSnapshotError(f"drive-backup start failed: {start['error']}")
+
+            # Poll until the job disappears (finished)
+            deadline = time.time() + 300  # 5 min
+            while time.time() < deadline:
+                jobs = _qmp_send({"execute": "query-block-jobs"}).get("return", [])
+                if not any(j.get("id") == job_id for j in jobs):
+                    break
+                time.sleep(0.5)
+            else:
+                raise OnlineSnapshotError("drive-backup timed out")
+
+            if not out.exists() or out.stat().st_size == 0:
+                raise OnlineSnapshotError("Snapshot file missing/empty after drive-backup")
+
+            logger.info(f"[snap] Live disk snapshot created via QMP: {out}")
+            return out
+
+        # Fallback: VM not running -> offline full copy is fine
         r = subprocess.run(
-            ["qemu-img", "snapshot", "-c", name, str(overlay)],
+            ["qemu-img", "convert", "-O", "qcow2", str(overlay), str(out)],
             capture_output=True, text=True
         )
         if r.returncode != 0:
-            raise OnlineSnapshotError(f"Failed to create snapshot {name}:\n{r.stderr}")
-
-        # 2) export that snapshot to a file you can boot from later
-        out = SNAPSHOTS_PATH / f"{self.user_id}__{self.os_type}__{self.vmid}.qcow2"
-        # overwrite is fine; keep one snapshot per VM if you want
-        r2 = subprocess.run(
-            ["qemu-img", "convert", "-O", "qcow2", "-s", name, str(overlay), str(out)],
-            capture_output=True, text=True
-        )
-        if r2.returncode != 0:
-            raise OnlineSnapshotError(f"Failed to export snapshot {name}:\n{r2.stderr}")
-
-        logging.info(f"[snap] Created+exported snapshot '{name}' -> {out}")
+            raise OnlineSnapshotError(f"Offline copy failed:\n{r.stderr}")
+        logger.info(f"[snap] Offline disk snapshot (full copy): {out}")
         return out
+
 
     def list_disk_snapshots(self) -> list[dict]:
         """List internal qcow2 snapshots (disk-only)."""
