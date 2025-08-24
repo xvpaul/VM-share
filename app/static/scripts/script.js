@@ -124,55 +124,55 @@ document.addEventListener("DOMContentLoaded", () => {
   // Auth & VM (unchanged auth, but VM uses delegation)
   // =====================
   // ===== Auth header (no modal, separate auth page) =====
-const authBtn   = document.getElementById("auth-btn");
-const logoutBtn = document.getElementById("logout-btn"); // legacy; we'll hide it
+  const authBtn   = document.getElementById("auth-btn");
+  const logoutBtn = document.getElementById("logout-btn"); // legacy; we'll hide it
 
-initHeaderAuth();
+  initHeaderAuth();
 
-async function initHeaderAuth() {
-  if (!authBtn) return; // header not present
+  async function initHeaderAuth() {
+    if (!authBtn) return; // header not present
 
-  const authed = await isAuthenticated();
+    const authed = await isAuthenticated();
 
-  if (!authed) {
-    // Show simple redirect button
-    authBtn.classList.remove("hidden");
-    authBtn.textContent = "Log in / Sign Up";
-    authBtn.onclick = () => { window.location.href = "/signup"; };
-    logoutBtn?.classList.add("hidden");
-    // remove any stale menu from previous state
+    if (!authed) {
+      // Show simple redirect button
+      authBtn.classList.remove("hidden");
+      authBtn.textContent = "Log in / Sign Up";
+      authBtn.onclick = () => { window.location.href = "/signup"; };
+      logoutBtn?.classList.add("hidden");
+      // remove any stale menu from previous state
+      removeUserMenu();
+    } else {
+      // Hide old buttons and render burger menu
+      authBtn.classList.add("hidden");
+      logoutBtn?.classList.add("hidden");
+      renderUserMenu(authBtn.parentElement);
+    }
+  }
+
+  async function isAuthenticated() {
+    try {
+      const r = await fetch("/auth/me", { credentials: "include" });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function removeUserMenu() {
+    const existing = document.getElementById("user-menu-wrap");
+    if (existing) existing.remove();
+  }
+
+  function renderUserMenu(container) {
+    if (!container) return;
     removeUserMenu();
-  } else {
-    // Hide old buttons and render burger menu
-    authBtn.classList.add("hidden");
-    logoutBtn?.classList.add("hidden");
-    renderUserMenu(authBtn.parentElement);
-  }
-}
 
-async function isAuthenticated() {
-  try {
-    const r = await fetch("/auth/me", { credentials: "include" });
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
+    const wrap = document.createElement("div");
+    wrap.id = "user-menu-wrap";
+    wrap.className = "relative ml-4";
 
-function removeUserMenu() {
-  const existing = document.getElementById("user-menu-wrap");
-  if (existing) existing.remove();
-}
-
-function renderUserMenu(container) {
-  if (!container) return;
-  removeUserMenu();
-
-  const wrap = document.createElement("div");
-  wrap.id = "user-menu-wrap";
-  wrap.className = "relative ml-4";
-
-  wrap.innerHTML = `
+    wrap.innerHTML = `
   <style>
     .menu {
       position: relative;
@@ -223,163 +223,194 @@ function renderUserMenu(container) {
   </div>
 `;
 
+    container.appendChild(wrap);
 
-  container.appendChild(wrap);
+    const trigger = wrap.querySelector("#user-menu-trigger");
+    const menu    = wrap.querySelector("#user-menu");
+    const logout  = wrap.querySelector("#logout-menu");
 
-  const trigger = wrap.querySelector("#user-menu-trigger");
-  const menu    = wrap.querySelector("#user-menu");
-  const logout  = wrap.querySelector("#logout-menu");
+    // Toggle menu
+    trigger.addEventListener("click", () => {
+      menu.classList.toggle("hidden");
+      trigger.classList.toggle("open"); // animate burger ↔ X
+      trigger.setAttribute("aria-expanded", menu.classList.contains("hidden") ? "false" : "true");
+    });
 
-  // Toggle menu
-  trigger.addEventListener("click", () => {
-    menu.classList.toggle("hidden");
-    trigger.classList.toggle("open"); // animate burger ↔ X
-    trigger.setAttribute("aria-expanded", menu.classList.contains("hidden") ? "false" : "true");
-  });
+    // Close on outside click / ESC
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) {
+        menu.classList.add("hidden");
+        trigger.classList.remove("open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        menu.classList.add("hidden");
+        trigger.classList.remove("open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
 
-  // Close on outside click / ESC
-  document.addEventListener("click", (e) => {
-    if (!wrap.contains(e.target)) {
-      menu.classList.add("hidden");
-      trigger.classList.remove("open");
-      trigger.setAttribute("aria-expanded", "false");
+    // Logout action
+    logout.addEventListener("click", async () => {
+      try { await fetch("/auth/logout", { method: "POST", credentials: "include" }); }
+      catch {}
+      initHeaderAuth();
+    });
+  }
+
+  // =====================
+  // Signup redirect setup for VM actions
+  // =====================
+  const SIGNUP_URL = "/signup.html"; // redirect target for unauthenticated VM clicks
+
+  // Helper: check auth and redirect if needed
+  async function ensureAuthOrRedirect() {
+    const authed = await isAuthenticated();
+    if (!authed) {
+      window.location.href = SIGNUP_URL;
+      return false;
     }
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      menu.classList.add("hidden");
-      trigger.classList.remove("open");
-      trigger.setAttribute("aria-expanded", "false");
-    }
-  });
-
-  // Logout action
-  logout.addEventListener("click", async () => {
-    try { await fetch("/auth/logout", { method: "POST", credentials: "include" }); }
-    catch {}
-    initHeaderAuth();
-  });
-}
+    return true;
+  }
 
   // =====================
   // VM launch — EVENT DELEGATION (works for clones)
   // =====================
 
   // --- Unified launcher with safeguard ---
-async function runVM(os_type) {
-  // If custom, go straight to /vm/run-iso (no body)
-  if (os_type === "custom") {
-    const res = await fetch("/vm/run-iso", { method: "POST", credentials: "include" });
-    let data = null, text = "";
-    try { data = await res.json(); } catch { try { text = await res.text(); } catch {} }
-    if (!res.ok) throw new Error((data && (data.detail || data.error || data.message)) || text || "VM launch failed");
-    if (data && data.redirect) window.location.href = data.redirect;
-    else alert("VM started but no redirect URL was provided.");
-    return;
-  }
+  async function runVM(os_type) {
+    // If custom, go straight to /vm/run-iso (no body)
+    if (os_type === "custom") {
+      const res = await fetch("/vm/run-iso", { method: "POST", credentials: "include" });
+      if (res.status === 401) { window.location.href = SIGNUP_URL; return; }
 
-  // Non-custom → /vm/run-script
-  try {
-    const res = await fetch("/vm/run-script", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ os_type }),
-    });
-
-    // If backend says ISO-only for some reason, transparently retry /run-iso
-    if (!res.ok) {
-      let d = null;
-      try { d = await res.clone().json(); } catch {}
-      const detail = d?.detail || d?.error || "";
-      if (/ISO-only/i.test(detail) || /use\s*\/run-iso/i.test(detail)) {
-        return runVM("custom");
-      }
+      let data = null, text = "";
+      try { data = await res.json(); } catch { try { text = await res.text(); } catch {} }
+      if (!res.ok) throw new Error((data && (data.detail || data.error || data.message)) || text || "VM launch failed");
+      if (data && data.redirect) window.location.href = data.redirect;
+      else alert("VM started but no redirect URL was provided.");
+      return;
     }
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.error || "VM launch failed");
-    if (data.redirect) window.location.href = data.redirect;
-    else alert("VM started but no redirect URL was provided.");
-  } catch (err) {
-    console.error("VM launch error:", err);
-    alert(err.message || "VM launch failed");
+    // Non-custom → /vm/run-script
+    try {
+      const res = await fetch("/vm/run-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ os_type }),
+      });
+
+      if (res.status === 401) { window.location.href = SIGNUP_URL; return; }
+
+      // If backend says ISO-only for some reason, transparently retry /run-iso
+      if (!res.ok) {
+        let d = null;
+        try { d = await res.clone().json(); } catch {}
+        const detail = d?.detail || d?.error || "";
+        if (/ISO-only/i.test(detail) || /use\s*\/run-iso/i.test(detail)) {
+          return runVM("custom");
+        }
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || "VM launch failed");
+      if (data.redirect) window.location.href = data.redirect;
+      else alert("VM started but no redirect URL was provided.");
+    } catch (err) {
+      console.error("VM launch error:", err);
+      alert(err.message || "VM launch failed");
+    }
   }
-}
 
-// --- 1) Clicks on any .vm-btn with data-os (skip custom here) ---
-track.addEventListener("click", (e) => {
-  const btn = e.target.closest(".vm-btn[data-os]");
-  if (!btn) return;
-  const os = btn.getAttribute("data-os");
-  if (!os) return;
-  if (os === "custom") return; // let the dedicated custom handler handle it
-  runVM(os);
-});
+  // --- 1) Clicks on any .vm-btn with data-os (skip custom here) ---
+  track.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".vm-btn[data-os]");
+    if (!btn) return;
+    const os = btn.getAttribute("data-os");
+    if (!os) return;
+    if (os === "custom") return; // let the dedicated custom handler handle it
 
-// --- Enable "Launch Custom Image" when a file is picked ---
-document.addEventListener("change", (e) => {
-  const input = e.target.closest("input[type='file'][data-custom]");
-  if (!input) return;
-  const panel = input.closest("article");
-  const launchBtn = panel?.querySelector(".vm-btn[data-os='custom']");
-  if (launchBtn) launchBtn.disabled = !(input.files && input.files.length);
-});
+    // Auth gate: redirect to signup.html if not logged in
+    if (!(await ensureAuthOrRedirect())) return;
 
-// --- Upload to /api/post, then trigger /run-iso (no body) ---
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".vm-btn[data-os='custom']");
-  if (!btn) return;
+    runVM(os);
+  });
 
-  const panel = btn.closest("article");
-  const fileInput = panel?.querySelector("input[type='file'][data-custom]");
-  const file = fileInput?.files?.[0];
-  if (!file) return;
+  // --- Enable "Launch Custom Image" when a file is picked ---
+  document.addEventListener("change", (e) => {
+    const input = e.target.closest("input[type='file'][data-custom]");
+    if (!input) return;
+    const panel = input.closest("article");
+    const launchBtn = panel?.querySelector(".vm-btn[data-os='custom']");
+    if (launchBtn) launchBtn.disabled = !(input.files && input.files.length);
+  });
 
-  const progressEl = panel?.querySelector('progress[data-upload-progress]');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Uploading…";
+  // --- Upload to /api/post, then trigger /run-iso (no body) ---
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".vm-btn[data-os='custom']");
+    if (!btn) return;
 
-  try {
-    // 1) Upload file to /api/post with progress
-    const fd = new FormData();
-    fd.append("file", file, file.name);
+    // Auth gate: redirect to signup.html if not logged in
+    if (!(await ensureAuthOrRedirect())) return;
 
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/post");
-      xhr.withCredentials = true;
-      xhr.timeout = 10 * 60 * 1000;
+    const panel = btn.closest("article");
+    const fileInput = panel?.querySelector("input[type='file'][data-custom]");
+    const file = fileInput?.files?.[0];
+    if (!file) return;
 
-      xhr.upload.onprogress = (evt) => {
-        if (!progressEl || !evt.lengthComputable) return;
-        progressEl.value = Math.round((evt.loaded / evt.total) * 100);
-      };
+    const progressEl = panel?.querySelector('progress[data-upload-progress]');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Uploading…";
 
-      xhr.onload = () => {
-        let data = null;
-        try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
-        if (xhr.status >= 200 && xhr.status < 300) resolve(data || {});
-        else reject(new Error((data && (data.detail || data.error || data.message)) || `Upload failed (${xhr.status})`));
-      };
-      xhr.ontimeout = () => reject(new Error("Upload timed out"));
-      xhr.onerror = () => reject(new Error("Network error during upload"));
-      xhr.send(fd);
-    });
+    try {
+      // 1) Upload file to /api/post with progress
+      const fd = new FormData();
+      fd.append("file", file, file.name);
 
-    // 2) Launch ISO (safeguard path)
-    btn.textContent = "Launching…";
-    await runVM("custom"); // calls /vm/run-iso under the hood
-  } catch (err) {
-    console.error("Custom image flow error:", err);
-    alert(err.message || "Custom image launch failed");
-  } finally {
-    btn.disabled = !(fileInput && fileInput.files && fileInput.files.length);
-    btn.textContent = originalText;
-    if (progressEl) progressEl.value = 0;
-  }
-});
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/post");
+        xhr.withCredentials = true;
+        xhr.timeout = 10 * 60 * 1000;
 
+        xhr.upload.onprogress = (evt) => {
+          if (!progressEl || !evt.lengthComputable) return;
+          progressEl.value = Math.round((evt.loaded / evt.total) * 100);
+        };
+
+        xhr.onload = () => {
+          // 401 → redirect and abort the promise chain
+          if (xhr.status === 401) {
+            window.location.href = SIGNUP_URL;
+            reject(new Error("Unauthorized"));
+            return;
+          }
+
+          let data = null;
+          try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data || {});
+          else reject(new Error((data && (data.detail || data.error || data.message)) || `Upload failed (${xhr.status})`));
+        };
+        xhr.ontimeout = () => reject(new Error("Upload timed out"));
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.send(fd);
+      });
+
+      // 2) Launch ISO (safeguard path)
+      btn.textContent = "Launching…";
+      await runVM("custom"); // handles 401 internally too
+    } catch (err) {
+      console.error("Custom image flow error:", err);
+      alert(err.message || "Custom image launch failed");
+    } finally {
+      btn.disabled = !(fileInput && fileInput.files && fileInput.files.length);
+      btn.textContent = originalText;
+      if (progressEl) progressEl.value = 0;
+    }
+  });
 
 });
