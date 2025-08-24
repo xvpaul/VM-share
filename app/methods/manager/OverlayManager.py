@@ -369,29 +369,33 @@ class QemuOverlayManager:
    
     def create_disk_snapshot(self, name: str) -> Path:
         """
-        Create an *external* qcow2 snapshot file (disk-only).
-        Stored in SNAPSHOTS_PATH for persistence.
+        Make an *internal* qcow2 snapshot on the active overlay, then export it
+        to a standalone qcow2 file: {user_id}__{os_type}__{vmid}.qcow2
         """
         overlay = self.overlay_path()
         if not overlay.exists():
             raise FileNotFoundError(f"Overlay not found: {overlay}")
 
-        snapshot_file = SNAPSHOTS_PATH / f"{name}.qcow2"
+        # 1) internal snapshot
+        r = subprocess.run(
+            ["qemu-img", "snapshot", "-c", name, str(overlay)],
+            capture_output=True, text=True
+        )
+        if r.returncode != 0:
+            raise OnlineSnapshotError(f"Failed to create snapshot {name}:\n{r.stderr}")
 
-        cmd = [
-            "qemu-img", "create", "-f", "qcow2",
-            "-b", str(overlay),
-            "-F", "qcow2",
-            str(snapshot_file)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise OnlineSnapshotError(
-                f"Failed to create external snapshot {name}:\n{result.stderr}"
-            )
+        # 2) export that snapshot to a file you can boot from later
+        out = SNAPSHOTS_PATH / f"{self.user_id}__{self.os_type}__{self.vmid}.qcow2"
+        # overwrite is fine; keep one snapshot per VM if you want
+        r2 = subprocess.run(
+            ["qemu-img", "convert", "-O", "qcow2", "-s", name, str(overlay), str(out)],
+            capture_output=True, text=True
+        )
+        if r2.returncode != 0:
+            raise OnlineSnapshotError(f"Failed to export snapshot {name}:\n{r2.stderr}")
 
-        logger.info(f"[snap] Created external snapshot '{name}' at {snapshot_file}")
-        return snapshot_file
+        logging.info(f"[snap] Created+exported snapshot '{name}' -> {out}")
+        return out
 
     def list_disk_snapshots(self) -> list[dict]:
         """List internal qcow2 snapshots (disk-only)."""
