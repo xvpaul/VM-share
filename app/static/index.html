@@ -185,59 +185,59 @@
   <h2 class="text-3xl font-bold mb-4">FAQ</h2>
   <div class="divide-y divide-white/10">
 
-    <details class="group py-4">
-      <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-        What happens when I click the “Get” button?
-        <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-      </summary>
-      <p class="mt-2 text-neutral-400">
-        A base image overlay will be created, and you’ll be redirected to a web interface where you can control your virtual machine.
-      </p>
-    </details>
-
-     <details class="group py-4">
+  <details class="group py-4">
   <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-    I'm getting strange errors / the VM boots very slowly
+    What happens when I click the “Get” button?
     <span class="ml-4 transition-transform group-open:rotate-45">+</span>
   </summary>
   <p class="mt-2 text-neutral-400">
-    Due to extremely limited server capacity, only Alpine Linux is reliably supported at the moment. Other images may fail to boot or may run slowly.
+    A base image overlay will be created, and you’ll be redirected to a web interface where you can control your virtual machine.
   </p>
 </details>
 
-
-    <details class="group py-4">
-      <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-        Do I need to log in?
-        <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-      </summary>
-      <p class="mt-2 text-neutral-400">
-        Yes. Use the “Log in / Sign Up” button. Once authenticated, the launch buttons will become available.
-      </p>
-    </details>
-
-    <details class="group py-4">
-      <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-        How long do VMs stay alive?
-        <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-      </summary>
-      <p class="mt-2 text-neutral-400">
-        Currently, they stay up indefinitely unless you get disconnected. In the future, quotas and time limits will be introduced.
-      </p>
-    </details>
-
-    <details class="group py-4">
-      <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-        Can I access a GUI?
-        <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-      </summary>
-      <p class="mt-2 text-neutral-400">
-        The current VM stack provides headless machines only — except Tiny Core. You can upload your own QEMU-compatible image with a preinstalled GUI, but usability isn’t guaranteed due to limited server resources.
-      </p>
-    </details>
 <details class="group py-4">
   <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-    Will Windows or new Linux distributions be added?
+    Can I really upload any ISO and run it?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Yes and no. You can try uploading a lightweight Linux distribution, and it may even be usable, but nothing is guaranteed. Heavier systems, like GNOME-based Ubuntu, will likely fail to boot due to limited VPS capacity and the lack of <code>/dev/kvm</code> access.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    What about a GUI?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    I’ve tried Slax—it booted, ran, and was somewhat usable. Other lightweight systems like this can also be booted and run.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    I’m getting strange errors / the VM boots very slowly
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Due to extremely limited server capacity, only Alpine Linux is reliably supported at the moment. Other images may fail to boot or may run very slowly.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    How long do VMs stay alive?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Currently, they stay up indefinitely unless you get disconnected. In the future, quotas and time limits will be introduced.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    Will Windows or newer Linux distributions be added?
     <span class="ml-4 transition-transform group-open:rotate-45">+</span>
   </summary>
   <p class="mt-2 text-neutral-400">
@@ -247,23 +247,14 @@
 
 <details class="group py-4">
   <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-    Are snapshots availiable?
+    Are snapshots available?
     <span class="ml-4 transition-transform group-open:rotate-45">+</span>
   </summary>
   <p class="mt-2 text-neutral-400">
-    Currently, this feature is only accessible to special accounts (read: just me). In the future, snapshots will be available to everyone.
+    Yes.
   </p>
 </details>
 
-<details class="group py-4">
-  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
-    Is it free?
-    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-  </summary>
-  <p class="mt-2 text-neutral-400">
-    For now, yes. In the distant future, possibly not.
-  </p>
-</details>
 
   </div>
 </section>
