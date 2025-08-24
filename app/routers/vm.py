@@ -18,28 +18,7 @@ from methods.manager.WebsockifyService import WebsockifyService
 
 import configs.log_config as logs
 
-"""
-Logging configuration 
-"""
-
-log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
-
-try:
-    os.makedirs(logs.LOG_DIR, exist_ok=True)
-    logging.basicConfig(
-        filename=log_file_path,
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-
-except Exception as e:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-    logging.error(f"Failed to initialize file logging: {e}")
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -62,21 +41,21 @@ async def run_vm_script(
         existing = store.get_running_by_user(user_id)
         # print(existing)
         if existing is not None:
-            logging.info(f"[run_vm_script] User {user_id} already has VM {existing['vmid']}")
+            logger.info(f"[run_vm_script] User {user_id} already has VM {existing['vmid']}")
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
                 "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={existing['http_port']}"
             })
 
-        logging.info(f"[run_vm_script] Launch requested by {user.login} (id={user_id}); vmid={vmid}")
+        logger.info(f"[run_vm_script] Launch requested by {user.login} (id={user_id}); vmid={vmid}")
 
         manager = QemuOverlayManager(user_id, vmid, os_type)
         overlay_path = manager.create_overlay()
-        logging.info(f"[run_vm_script] Overlay ready at {overlay_path}")
+        logger.info(f"[run_vm_script] Overlay ready at {overlay_path}")
 
         meta = manager.boot_vm(vmid)  # should return at least {"vnc_socket": "..."} or {"vnc_host": "...", "vnc_port": ...}
-        logging.info(f"[run_vm_script] VM booted (vmid={vmid})")
+        logger.info(f"[run_vm_script] VM booted (vmid={vmid})")
 
         # Pick target for websockify based on meta format
         if "vnc_socket" in meta:
@@ -85,7 +64,7 @@ async def run_vm_script(
             target = f"{meta['vnc_host']}:{meta['vnc_port']}"  # host:port
 
         http_port = ws.start(vmid, target)  # starts websockify; returns public port
-        logging.info(f"[run_vm_script] Websockify on :{http_port} for VM {vmid}")
+        logger.info(f"[run_vm_script] Websockify on :{http_port} for VM {vmid}")
 
         store.set(vmid, {
             **meta,
@@ -104,7 +83,7 @@ async def run_vm_script(
         return JSONResponse(response)
 
     except Exception as e:
-        logging.exception(f"[run_vm_script] Failed for user {user.login} (id={user.id}): {e}")
+        logger.exception(f"[run_vm_script] Failed for user {user.login} (id={user.id}): {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/run-iso")
@@ -157,7 +136,7 @@ async def run_custom_iso(
             raise RuntimeError(f"ISO too small ({size} bytes): {iso_path}")
 
         iso_abs = str(iso_path.resolve(strict=True))
-        logging.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs} (size={size} bytes)")
+        logger.info(f"[run_custom_iso] Launching custom ISO for {user.login} (vmid={vmid}) at {iso_abs} (size={size} bytes)")
 
         # Launch without overlays
         manager = QemuOverlayManager(user_id, vmid, "custom")
@@ -176,10 +155,10 @@ async def run_custom_iso(
         })
 
     except FileNotFoundError as e:
-        logging.exception(f"[run_custom_iso] ISO not found: {e}")
+        logger.exception(f"[run_custom_iso] ISO not found: {e}")
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logging.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
+        logger.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/snapshot")
@@ -214,18 +193,18 @@ async def create_snapshot(
         mgr = QemuOverlayManager(user_id=user.id, vmid=vmid, os_type=os_type)
         mgr.create_disk_snapshot(snapshot_name)
 
-        logging.info(
+        logger.info(
             "[snapshot] success user=%s vmid=%s snapshot=%s",
             user.id, vmid, snapshot_name
         )
         return {"status": "ok", "snapshot": snapshot_name}
 
     except FileNotFoundError as e:
-        logging.error("[snapshot] overlay not found user=%s vmid=%s error=%s", user.id, vmid, e)
+        logger.error("[snapshot] overlay not found user=%s vmid=%s error=%s", user.id, vmid, e)
         raise HTTPException(status_code=404, detail=f"Overlay not found: {e}")
 
     except OnlineSnapshotError as e:
-        logging.error("[snapshot] failed user=%s vmid=%s error=%s", user.id, vmid, e)
+        logger.error("[snapshot] failed user=%s vmid=%s error=%s", user.id, vmid, e)
         raise HTTPException(status_code=500, detail=f"Snapshot error: {e}")
 
     except HTTPException:
@@ -233,7 +212,7 @@ async def create_snapshot(
         raise
 
     except Exception as e:
-        logging.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
+        logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 

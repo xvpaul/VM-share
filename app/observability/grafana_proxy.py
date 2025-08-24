@@ -5,8 +5,11 @@ import logging
 from fastapi import APIRouter, HTTPException, Query, Response
 import httpx
 
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
-logging.info("grafana_proxy: module loaded")
+logger.info("grafana_proxy: module loaded")
 
 @router.get("/grafana/panel.png")
 async def grafana_panel_png(
@@ -24,7 +27,7 @@ async def grafana_panel_png(
     token = os.getenv("GRAFANA_TOKEN", "glsa_7nvHWsRynyHsg71ITPmHs8vWC1uIqVZp_20231f01")
 
     if not token:
-        logging.error("grafana_proxy: GRAFANA_TOKEN is not set")
+        logger.error("grafana_proxy: GRAFANA_TOKEN is not set")
         raise HTTPException(500, "GRAFANA_TOKEN not configured on server")
 
     url = f"{base}/render/d-solo/{uid}/_"  # slug can be anything
@@ -41,7 +44,7 @@ async def grafana_panel_png(
     if tz:
         params["tz"] = tz
 
-    logging.info(
+    logger.info(
         "grafana_proxy: render request base=%s uid=%s panelId=%s from=%s to=%s w=%s h=%s theme=%s orgId=%s tz=%s",
         base, uid, panelId, _from, to, width, height, theme, orgId, tz
     )
@@ -57,7 +60,7 @@ async def grafana_panel_png(
             r = await client.get(url, params=params, headers=headers)
     except httpx.RequestError as e:
         dt = (time.perf_counter() - t0) * 1000
-        logging.exception("grafana_proxy: unreachable base=%s dur_ms=%.1f err=%s", base, dt, e)
+        logger.exception("grafana_proxy: unreachable base=%s dur_ms=%.1f err=%s", base, dt, e)
         raise HTTPException(502, f"Grafana unreachable: {e}") from e
 
     dt = (time.perf_counter() - t0) * 1000
@@ -66,13 +69,13 @@ async def grafana_panel_png(
 
     if r.status_code != 200 or "image" not in ct:
         snippet = (r.text or "")[:200]
-        logging.warning(
+        logger.warning(
             "grafana_proxy: render failed status=%s ct=%s bytes=%s dur_ms=%.1f url=%s params=%s snippet=%r",
             r.status_code, ct, size, dt, url, params, snippet
         )
         raise HTTPException(502, f"Grafana render failed {r.status_code}: {snippet}")
 
-    logging.info(
+    logger.info(
         "grafana_proxy: render ok status=%s bytes=%s dur_ms=%.1f uid=%s panelId=%s",
         r.status_code, size, dt, uid, panelId
     )

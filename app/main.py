@@ -4,28 +4,8 @@ import os, asyncio, logging
 from pathlib import Path
 import configs.log_config as logs
 
-"""
-Logging configuration 
-"""
+logger = logging.getLogger(__name__)
 
-log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
-
-try:
-    os.makedirs(logs.LOG_DIR, exist_ok=True)
-    logging.basicConfig(
-        filename=log_file_path,
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-
-except Exception as e:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-    logging.error(f"Failed to initialize file logging: {e}")
 
 
 # ---- load .env FIRST (before importing modules that read env) ----
@@ -83,7 +63,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        logging.info("main.py: lifespan shutdown → stopping background tasks")
+        logger.info("main.py: lifespan shutdown → stopping background tasks")
         stop_event.set()
         for t in tasks:
             try:
@@ -92,24 +72,24 @@ async def lifespan(app: FastAPI):
                 t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        logging.info("main.py: lifespan shutdown → beginning cleanup")
+        logger.info("main.py: lifespan shutdown → beginning cleanup")
         store = get_session_store()
         try:
             sessions = store.items()
-            logging.info("main.py: found %d sessions to clean", len(sessions))
+            logger.info("main.py: found %d sessions to clean", len(sessions))
         except Exception:
             sessions = []
-            logging.exception("main.py: failed to enumerate sessions")
+            logger.exception("main.py: failed to enumerate sessions")
 
         for vmid, _ in sessions:
             try:
                 cleanup_vm(vmid, store)
             except Exception:
-                logging.exception("cleanup_vm failed for %s", vmid)
+                logger.exception("cleanup_vm failed for %s", vmid)
             try:
                 store.delete(vmid)
             except Exception:
-                logging.exception("store.delete failed for %s", vmid)
+                logger.exception("store.delete failed for %s", vmid)
 
 app = FastAPI(lifespan=lifespan)
 

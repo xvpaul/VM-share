@@ -3,6 +3,9 @@ import asyncio, psutil, logging
 from datetime import datetime
 from sentry_sdk import capture_message
 
+logger = logging.getLogger(__name__)
+
+
 CPU_THRESH = 90   # %
 RAM_THRESH = 85   # %
 SUSTAINED  = 60   # seconds
@@ -28,7 +31,7 @@ async def resource_watchdog(stop_event: asyncio.Event):
 
             if fire_cpu:
                 msg = f"[Host] CPU ≥{CPU_THRESH}% for {SUSTAINED}s (now {cpu:.0f}%)"
-                logging.warning(msg)
+                logger.warning(msg)
                 capture_message(msg, level="warning")
                 over_cpu = now
 
@@ -38,11 +41,11 @@ async def resource_watchdog(stop_event: asyncio.Event):
                     if (p.info['name'] or '').startswith('qemu-system') and p.info['memory_info']:
                         qemu_rss += p.info['memory_info'].rss
                 msg = f"[Host] RAM ≥{RAM_THRESH}% for {SUSTAINED}s (qemu RSS≈{qemu_rss/(1024**3):.2f} GiB)"
-                logging.warning(msg)
+                logger.warning(msg)
                 capture_message(msg, level="warning")
                 over_ram = now
         except Exception as e:
-            logging.exception("resource_watchdog error: %s", e)
+            logger.exception("resource_watchdog error: %s", e)
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=INTERVAL)

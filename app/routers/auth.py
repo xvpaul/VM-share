@@ -15,34 +15,11 @@ from methods.manager.SessionManager import get_session_store, SessionStore
 from utils import cleanup_vm
 
 
+logger = logging.getLogger(__name__)
 
 class LoginJSON(BaseModel):
     username: str
     password: str
-
-"""
-Logging configuration 
-"""
-
-log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
-
-try:
-    os.makedirs(logs.LOG_DIR, exist_ok=True)
-    logging.basicConfig(
-        filename=log_file_path,
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-
-except Exception as e:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-    logging.error(f"Failed to initialize file logging: {e}")
-
 
 
 router = APIRouter()
@@ -56,7 +33,7 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         password = body.get("password")
 
         if not login or not password:
-            logging.warning("VM_share/app/routers/auth.py: Registration failed: missing login or password")
+            logger.warning("VM_share/app/routers/auth.py: Registration failed: missing login or password")
             raise HTTPException(status_code=400, detail="Missing login or password")
         
         existing = db.query(User).filter(User.login == login).first()
@@ -81,7 +58,7 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
                 # return resp
                 raise HTTPException(status_code=409, detail="User exists")
             else:
-                logging.warning(f"VM_share/app/routers/auth.py: Login failed for existing user '{login}': wrong password")
+                logger.warning(f"VM_share/app/routers/auth.py: Login failed for existing user '{login}': wrong password")
                 raise HTTPException(status_code=401, detail="User exists, wrong password")
 
         # new user
@@ -112,22 +89,22 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{body.get('login', 'unknown')}': {e}")
+        logger.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{body.get('login', 'unknown')}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     
 @router.post("/login")
 async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
     try:
-        logging.info(f"VM_share/app/routers/auth.py: /login attempt for user '{payload.username}'")
+        logger.info(f"VM_share/app/routers/auth.py: /login attempt for user '{payload.username}'")
 
         auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
-            logging.warning(f"VM_share/app/routers/auth.py: /login failed for '{payload.username}' (invalid creds)")
+            logger.warning(f"VM_share/app/routers/auth.py: /login failed for '{payload.username}' (invalid creds)")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         token = auth.create_access_token({"sub": user.login})
-        logging.info(f"VM_share/app/routers/auth.py: /login issued JWT for user '{user.login}' (id={user.id})")
+        logger.info(f"VM_share/app/routers/auth.py: /login issued JWT for user '{user.login}' (id={user.id})")
 
         resp = JSONResponse({
             "message": "Login successful",
@@ -137,25 +114,25 @@ async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
         })
 
         dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
-        logging.info(
+        logger.info(
             "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
             "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
             user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
         )
 
         set_auth_cookie(resp, token, dev_localhost=dev_localhost)
-        logging.info(f"VM_share/app/routers/auth.py: /login succeeded for '{user.login}' (cookie set)")
+        logger.info(f"VM_share/app/routers/auth.py: /login succeeded for '{user.login}' (cookie set)")
         return resp
 
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"VM_share/app/routers/auth.py: Exception during /login for user '{payload.username}': {e}")
+        logger.exception(f"VM_share/app/routers/auth.py: Exception during /login for user '{payload.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_auth_cookie(resp: JSONResponse, token: str, *, dev_localhost: bool = True):
-    logging.info(
+    logger.info(
         f"VM_share/app/routers/auth.py: Setting auth cookie "
         f"(secure={not dev_localhost}, samesite='lax', max_age={COOKIE_MAX_AGE})"
     )
@@ -173,34 +150,34 @@ def set_auth_cookie(resp: JSONResponse, token: str, *, dev_localhost: bool = Tru
 def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
-        logging.info(f"VM_share/app/routers/auth.py: /token login attempt for user '{payload.username}'")
+        logger.info(f"VM_share/app/routers/auth.py: /token login attempt for user '{payload.username}'")
 
         auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
-            logging.warning(f"VM_share/app/routers/auth.py: /token login failed for '{payload.username}' (invalid creds)")
+            logger.warning(f"VM_share/app/routers/auth.py: /token login failed for '{payload.username}' (invalid creds)")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         token = auth.create_access_token({"sub": user.login})
-        logging.info(f"VM_share/app/routers/auth.py: /token issued JWT for user '{user.login}' (id={user.id})")
+        logger.info(f"VM_share/app/routers/auth.py: /token issued JWT for user '{user.login}' (id={user.id})")
 
         resp = JSONResponse({"access_token": token, "token_type": "bearer", "id": user.id})
 
         dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
-        logging.info(
+        logger.info(
             "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
             "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
             user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
         )
 
         set_auth_cookie(resp, token, dev_localhost=dev_localhost)  # FALSE FALSE FALSE!!!
-        logging.info(f"VM_share/app/routers/auth.py: /token login succeeded for '{user.login}' (cookie set)")
+        logger.info(f"VM_share/app/routers/auth.py: /token login succeeded for '{user.login}' (cookie set)")
         return resp
 
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"VM_share/app/routers/auth.py: Exception during /token for user '{payload.username}': {e}")
+        logger.exception(f"VM_share/app/routers/auth.py: Exception during /token for user '{payload.username}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -209,13 +186,13 @@ def logout_user(
     user = Depends(get_current_user),
     store = Depends(get_session_store),
 ):
-    logging.info("Logging out user %s: deleting auth cookie and terminating sessions...", getattr(user, "id", "?"))
+    logger.info("logger out user %s: deleting auth cookie and terminating sessions...", getattr(user, "id", "?"))
 
     resp = JSONResponse({"message": "Logged out"})
     try:
         resp.delete_cookie("access_token", path="/")
     except Exception:
-        logging.exception("Failed to delete access_token cookie for user %s", getattr(user, "id", "?"))
+        logger.exception("Failed to delete access_token cookie for user %s", getattr(user, "id", "?"))
 
     vmid = None
     try:
@@ -223,26 +200,26 @@ def logout_user(
         if isinstance(sess, dict):
             vmid = sess.get("vmid")
     except Exception:
-        logging.exception("get_running_by_user failed for user %s", user.id)
+        logger.exception("get_running_by_user failed for user %s", user.id)
 
     if vmid:
-        logging.info("Terminating VM %s for user %s ...", vmid, user.id)
+        logger.info("Terminating VM %s for user %s ...", vmid, user.id)
         try:
             cleanup_vm(vmid, store)
         except Exception:
-            logging.exception("cleanup_vm failed for vmid=%s (user=%s)", vmid, user.id)
+            logger.exception("cleanup_vm failed for vmid=%s (user=%s)", vmid, user.id)
         try:
             store.delete(vmid)
         except Exception:
-            logging.exception("store.delete failed for vmid=%s", vmid)
+            logger.exception("store.delete failed for vmid=%s", vmid)
     else:
-        logging.info("Logout: no active VM for user %s (nothing to terminate).", user.id)
+        logger.info("Logout: no active VM for user %s (nothing to terminate).", user.id)
 
     return resp
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
-    logging.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
+    logger.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
     return {"id": user.id, "login": user.login, "role": user.role}
 
 
@@ -257,7 +234,7 @@ async def me(user: User = Depends(get_current_user)):
 #         token = auth.create_access_token({"sub": user.login})
 #         return {"access_token": token, "token_type": "bearer"}
 #     except Exception as e:
-#         logging.exception("Login error: %s", e)
+#         logger.exception("Login error: %s", e)
 #         raise HTTPException(status_code=500, detail="Internal server error")
 
 # @router.get("/me")

@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Optional
 import configs.vm_profiles as vm_profiles
 
+logger = logging.getLogger(__name__)
+
+
 RUN_DIR = Path("/tmp/qemu")
 
 
@@ -35,13 +38,13 @@ def cleanup_vm(vmid: str, store) -> None:
     try:
         session = store.get(vmid)
         if not session:
-            logging.warning(f"[cleanup_vm] No active session found for VM {vmid}")
+            logger.warning(f"[cleanup_vm] No active session found for VM {vmid}")
             return
 
         user_id = session.get("user_id")
         os_type = session.get("os_type")
 
-        logging.info(f"[cleanup_vm] Cleaning VM {vmid} (user={user_id}, os={os_type})")
+        logger.info(f"[cleanup_vm] Cleaning VM {vmid} (user={user_id}, os={os_type})")
 
         # Figure out what to remove later
         files_to_remove = []
@@ -68,20 +71,20 @@ def cleanup_vm(vmid: str, store) -> None:
         if ws_pid:
             try:
                 os.kill(ws_pid, 15)
-                logging.info(f"[cleanup_vm] SIGTERM → websockify pid={ws_pid}")
+                logger.info(f"[cleanup_vm] SIGTERM → websockify pid={ws_pid}")
             except ProcessLookupError:
-                logging.info(f"[cleanup_vm] websockify pid={ws_pid} already gone")
+                logger.info(f"[cleanup_vm] websockify pid={ws_pid} already gone")
             except Exception:
-                logging.exception(f"[cleanup_vm] failed to SIGTERM websockify pid={ws_pid}")
+                logger.exception(f"[cleanup_vm] failed to SIGTERM websockify pid={ws_pid}")
 
         if qemu_pid:
             try:
                 os.kill(qemu_pid, 15)
-                logging.info(f"[cleanup_vm] SIGTERM → qemu pid={qemu_pid}")
+                logger.info(f"[cleanup_vm] SIGTERM → qemu pid={qemu_pid}")
             except ProcessLookupError:
-                logging.info(f"[cleanup_vm] qemu pid={qemu_pid} already gone")
+                logger.info(f"[cleanup_vm] qemu pid={qemu_pid} already gone")
             except Exception:
-                logging.exception(f"[cleanup_vm] failed to SIGTERM qemu pid={qemu_pid}")
+                logger.exception(f"[cleanup_vm] failed to SIGTERM qemu pid={qemu_pid}")
         else:
             subprocess.run(["pkill", "-f", vmid], check=False)
 
@@ -90,27 +93,27 @@ def cleanup_vm(vmid: str, store) -> None:
             try:
                 if f and f.exists():
                     f.unlink()
-                    logging.info(f"[cleanup_vm] Deleted {f}")
+                    logger.info(f"[cleanup_vm] Deleted {f}")
             except Exception:
-                logging.exception(f"[cleanup_vm] Failed to delete {f}")
+                logger.exception(f"[cleanup_vm] Failed to delete {f}")
 
         # Remove sockets
         for sock in (RUN_DIR / f"vnc-{vmid}.sock", RUN_DIR / f"qmp-{vmid}.sock"):
             try:
                 if sock.exists():
                     sock.unlink()
-                    logging.info(f"[cleanup_vm] Removed socket {sock}")
+                    logger.info(f"[cleanup_vm] Removed socket {sock}")
             except Exception:
-                logging.exception(f"[cleanup_vm] Failed to remove socket {sock}")
+                logger.exception(f"[cleanup_vm] Failed to remove socket {sock}")
 
         # Finally drop from Redis
         try:
             store.delete(vmid)
         except Exception:
-            logging.exception(f"[cleanup_vm] store.delete failed for {vmid}")
+            logger.exception(f"[cleanup_vm] store.delete failed for {vmid}")
 
     except Exception as e:
-        logging.exception(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
+        logger.exception(f"[cleanup_vm] Error while cleaning up VM {vmid}: {e}")
 
 #legacy code
 
@@ -119,7 +122,7 @@ def cleanup_vm(vmid: str, store) -> None:
 #     Start websockify for this VM and tail its stdout to react to connects/disconnects.
 #     `store` is the Redis-backed SessionStore (used to update last_seen and cleanup).
 #     """
-#     logging.info(f"[start_websockify] : Started.")
+#     logger.info(f"[start_websockify] : Started.")
 #     static_dir = Path(__file__).parent / "static"
 
 #     cmd = [
@@ -143,7 +146,7 @@ def cleanup_vm(vmid: str, store) -> None:
 #                 return
 #             for line in proc.stdout:
 #                 line = line.strip()
-#                 logging.info(f"[websockify:{vmid}] {line}")
+#                 logger.info(f"[websockify:{vmid}] {line}")
 
 #                 lower = line.lower()
 #                 if "client closed connection" in lower:
@@ -151,7 +154,7 @@ def cleanup_vm(vmid: str, store) -> None:
 #                         store.update(vmid, last_seen=str(int(Path().stat().st_mtime_ns // 1_000_000)))
 #                     except Exception:
 #                         pass
-#                     logging.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
+#                     logger.info(f"[websockify:{vmid}] Client disconnected. Clean-up starts.")
 #                     cleanup_vm(vmid, store)
 
 #                 elif "connecting to unix socket" in lower or "accepted connection" in lower:
@@ -161,14 +164,14 @@ def cleanup_vm(vmid: str, store) -> None:
 #                         pass
 
 #         except Exception:
-#             logging.exception(f"[websockify:{vmid}] monitor error")
+#             logger.exception(f"[websockify:{vmid}] monitor error")
 #         finally:
 #             try:
 #                 if proc.poll() is not None:
-#                     logging.info(f"[websockify:{vmid}] process exited with code {proc.returncode}, cleanup")
+#                     logger.info(f"[websockify:{vmid}] process exited with code {proc.returncode}, cleanup")
 #                     cleanup_vm(vmid, store)
 #             except Exception:
-#                 logging.exception(f"[websockify:{vmid}] finalizer cleanup failed")
+#                 logger.exception(f"[websockify:{vmid}] finalizer cleanup failed")
 
 #     Thread(target=monitor_output, daemon=True).start()
 #     return proc

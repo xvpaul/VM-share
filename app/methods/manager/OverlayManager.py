@@ -7,29 +7,7 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
-"""
-Logging configuration 
-"""
-
-log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
-
-try:
-    os.makedirs(logs.LOG_DIR, exist_ok=True)
-    logging.basicConfig(
-        filename=log_file_path,
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-
-except Exception as e:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s.%(msecs)05d %(message)s',
-        datefmt='%Y-%m-%d %H-%M-%S',
-    )
-    logging.error(f"Failed to initialize file logging: {e}")
-
+logger = logging.getLogger(__name__)
 
 RUN_DIR = Path("/tmp/qemu")
 RUN_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,17 +42,17 @@ class QemuOverlayManager:
         try:
             overlay = self.overlay_path()
             if overlay.exists():
-                logging.info(f"Overlay already exists for user {self.user_id}: {overlay}")
+                logger.info(f"Overlay already exists for user {self.user_id}: {overlay}")
                 return overlay
             subprocess.check_call([
                 "qemu-img", "create", "-f", "qcow2",
                 "-F", "qcow2", "-b", str(self.profile["base_image"]),
                 str(overlay)
             ])
-            logging.info(f"Created overlay for user {self.user_id}: {overlay}")
+            logger.info(f"Created overlay for user {self.user_id}: {overlay}")
             return overlay
         except Exception as e:
-            logging.exception(f"Unexpected error during overlay creation for user {self.user_id}: {e}")
+            logger.exception(f"Unexpected error during overlay creation for user {self.user_id}: {e}")
             raise
 
     def _socket_paths(self, vmid: str):
@@ -86,14 +64,14 @@ class QemuOverlayManager:
         overlay = self.overlay_path()
         if not overlay.exists():
             error_msg = f"Overlay missing for user {self.user_id}: {overlay}"
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
         vnc_sock, qmp_sock = self._socket_paths(vmid)
         for s in (vnc_sock, qmp_sock):
             if s.exists():
                 s.unlink()
-                logging.warning(f"Removed existing socket: {s}")
+                logger.warning(f"Removed existing socket: {s}")
 
         mem = str(memory_mb or self.profile["default_memory"])
 
@@ -103,7 +81,7 @@ class QemuOverlayManager:
             if pidfile.exists():
                 pidfile.unlink()
         except Exception as e:
-            logging.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
+            logger.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
         cmd = [
             "qemu-system-x86_64",
@@ -119,7 +97,7 @@ class QemuOverlayManager:
         ]
         
 
-        logging.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
+        logger.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
@@ -128,7 +106,7 @@ class QemuOverlayManager:
                 f"Return code: {result.returncode}\n"
                 f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
             )
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise RuntimeError(error_msg)
 
         # NEW: race-proof wait for pidfile to appear (qemu writes it after daemonize)
@@ -149,10 +127,10 @@ class QemuOverlayManager:
                 f"QEMU started but no pidfile within {wait_timeout_s}s "
                 f"(expected at {pidfile}). Last read error: {last_exc}. STDERR: {result.stderr}"
             )
-            logging.error(msg)
+            logger.error(msg)
             raise FileNotFoundError(msg)
 
-        logging.info(f"QEMU successfully started for user {self.user_id} (vmid={vmid}) with PID {qemu_pid}")
+        logger.info(f"QEMU successfully started for user {self.user_id} (vmid={vmid}) with PID {qemu_pid}")
 
         return {
             "user_id": self.user_id,
@@ -301,9 +279,9 @@ class QemuOverlayManager:
             try:
                 if p.exists():
                     p.unlink()
-                    logging.warning(f"[boot_from_iso] removed leftover: {p}")
+                    logger.warning(f"[boot_from_iso] removed leftover: {p}")
             except Exception as e:
-                logging.warning(f"[boot_from_iso] cleanup failed for {p}: {e}")
+                logger.warning(f"[boot_from_iso] cleanup failed for {p}: {e}")
 
         # 3) Optional scratch disk
         scratch_path = None
@@ -316,7 +294,7 @@ class QemuOverlayManager:
                 subprocess.check_call([
                     "qemu-img", "create", "-f", "qcow2", str(scratch_path), f"{int(data_disk_gb)}G"
                 ])
-                logging.info(f"[boot_from_iso] created scratch disk: {scratch_path}")
+                logger.info(f"[boot_from_iso] created scratch disk: {scratch_path}")
 
         # 4) Build minimal, VNC‑only, BIOS (SeaBIOS) command
         cmd = [
@@ -342,7 +320,7 @@ class QemuOverlayManager:
         if extra_qemu_args:
             cmd += list(extra_qemu_args)
 
-        logging.info(
+        logger.info(
             "Launching ISO (VNC, BIOS) user=%s vmid=%s os=%s iso_abs=%s size=%s mem=%s smp=%s",
             self.user_id, vmid, self.os_type, str(iso), size, mem, smp
         )
@@ -354,7 +332,7 @@ class QemuOverlayManager:
                 f"QEMU ISO boot failed (user={self.user_id} vmid={vmid})\n"
                 f"rc={result.returncode}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-            logging.error(msg)
+            logger.error(msg)
             raise RuntimeError(msg)
 
         # 6) Wait for pidfile
@@ -374,7 +352,7 @@ class QemuOverlayManager:
                 f"QEMU (ISO VNC) started but no pidfile within {wait_timeout_s}s "
                 f"(expected at {pidfile}). Last error: {last_exc}. STDERR: {result.stderr}"
             )
-            logging.error(msg)
+            logger.error(msg)
             raise FileNotFoundError(msg)
 
         return {
@@ -412,7 +390,7 @@ class QemuOverlayManager:
                 f"Failed to create external snapshot {name}:\n{result.stderr}"
             )
 
-        logging.info(f"[snap] Created external snapshot '{name}' at {snapshot_file}")
+        logger.info(f"[snap] Created external snapshot '{name}' at {snapshot_file}")
         return snapshot_file
 
     def list_disk_snapshots(self) -> list[dict]:
@@ -442,4 +420,4 @@ class QemuOverlayManager:
             raise OnlineSnapshotError(
                 f"Failed to delete snapshot {name}:\n{result.stderr}"
             )
-        logging.info(f"[snap] Deleted disk snapshot '{name}' for {overlay}")
+        logger.info(f"[snap] Deleted disk snapshot '{name}' for {overlay}")
