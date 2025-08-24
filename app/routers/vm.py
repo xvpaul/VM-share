@@ -217,7 +217,7 @@ async def create_snapshot(
 
 
 @router.post("/run_snaphot")
-async def create_snapshot(
+async def run_snapshot(
     request: RunScriptRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
