@@ -358,6 +358,9 @@ promForm?.addEventListener('submit', async (e) => {
 });
 
 // --- Snapshots ---
+const uiToast  = (msg, lvl = 'ok')  => (window.toast ? window.toast(msg, lvl) : console.log(`[toast:${lvl}] ${msg}`));
+const uiStatus = (txt, lvl = 'info') => (window.setStatus ? window.setStatus(txt, lvl) : console.log(`[status:${lvl}] ${txt}`));
+
 // Helper: extract os_type (2nd segment) from "{user}__{os_type}__{vmid}[.ext]"
 function extractOsTypeFromSnapshotId(id) {
   if (!id) return 'unknown';
@@ -366,7 +369,6 @@ function extractOsTypeFromSnapshotId(id) {
   return (parts.length >= 3 && parts[1]) ? parts[1] : 'unknown';
 }
 
-// Start VM from a snapshot entry using RUN_VM_ENDPOINT, then redirect
 async function runSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
@@ -382,7 +384,6 @@ async function runSnapshot(s, btn) {
       body: JSON.stringify({ os_type: osType, snapshot: snapshotId })
     });
 
-    // Try to parse a redirect URL (JSON > Location header > text body)
     let redirectUrl = null;
     let msg = res.ok ? 'VM starting…' : 'Failed to start VM';
 
@@ -390,11 +391,10 @@ async function runSnapshot(s, btn) {
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
         const data = await res.json();
-        if (data && typeof data.redirect === 'string') redirectUrl = data.redirect;
+        if (data?.redirect) redirectUrl = data.redirect;
         const id = data.id || data.name || data.snapshot || '';
         if (res.ok && id && !redirectUrl) msg = `VM starting from ${id}…`;
       } else {
-        // Fallback: header or first URL-like token in text
         redirectUrl = res.headers.get('Location');
         if (!redirectUrl) {
           const text = (await res.text()).trim();
@@ -403,29 +403,24 @@ async function runSnapshot(s, btn) {
           if (text && !redirectUrl) msg = text;
         }
       }
-    } catch {
-      // ignore parse errors
-    }
+    } catch {}
 
     if (res.ok && redirectUrl) {
-      toast('Opening console…', 'ok');
-      // Redirect and stop further UI updates
+      uiToast('Opening console…', 'ok');
       window.location.assign(redirectUrl);
       return;
     }
 
-    // No redirect found or request failed
-    toast(msg, res.ok ? 'ok' : 'err');
-    setStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
+    uiToast(msg, res.ok ? 'ok' : 'err');
+    uiStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
 
   } catch (e) {
-    toast(e.message || 'Start failed', 'err');
-    setStatus('Error', 'err');
+    uiToast(e.message || 'Start failed', 'err');
+    uiStatus('Error', 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
   }
 }
-
 
 function renderSnapshots(list) {
   const table = document.createElement('table');
