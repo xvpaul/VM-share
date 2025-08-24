@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from configs import server_config, vm_profiles
-from methods.manager.OverlayManager import QemuOverlayManager
+from methods.manager.OverlayManager import QemuOverlayManager, OnlineSnapshotError
 from methods.database.database import get_db
 from methods.auth.auth import get_current_user
 from methods.database.models import User
@@ -27,7 +27,6 @@ class RunScriptRequest(BaseModel):
 async def run_vm_script(
     request: RunScriptRequest,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
 ):
@@ -87,7 +86,6 @@ async def run_vm_script(
 @router.post("/run-iso")
 async def run_custom_iso(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
 ):
@@ -159,3 +157,67 @@ async def run_custom_iso(
     except Exception as e:
         logging.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/snapshot")
+async def create_snapshot(
+    request: RunScriptRequest,
+    user: User = Depends(get_current_user),
+    store: SessionStore = Depends(get_session_store),
+):
+    """
+    Create a disk-only snapshot of a running VM's overlay.
+    Snapshot name: {os_type}__{vmid}__{user_id}
+    """
+    vmid = None
+    try:
+        # Validate input
+        os_type = getattr(request, "os_type", None)
+        if not os_type:
+            raise HTTPException(status_code=400, detail="Missing os_type in request")
+
+        session = store.get_running_by_user(user.id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"No active VM found for user {user.id}")
+
+        vmid = session.get("vmid")
+        if not vmid:
+            raise HTTPException(status_code=500, detail="Session missing vmid")
+
+        # Build snapshot name
+        snapshot_name = f"{os_type}__{vmid}__{user.id}"
+
+        # Perform snapshot
+        mgr = QemuOverlayManager(user_id=user.id, vmid=vmid, os_type=os_type)
+        mgr.create_disk_snapshot(snapshot_name)
+
+        logging.info(
+            "[snapshot] success user=%s vmid=%s snapshot=%s",
+            user.id, vmid, snapshot_name
+        )
+        return {"status": "ok", "snapshot": snapshot_name}
+
+    except FileNotFoundError as e:
+        logging.error("[snapshot] overlay not found user=%s vmid=%s error=%s", user.id, vmid, e)
+        raise HTTPException(status_code=404, detail=f"Overlay not found: {e}")
+
+    except OnlineSnapshotError as e:
+        logging.error("[snapshot] failed user=%s vmid=%s error=%s", user.id, vmid, e)
+        raise HTTPException(status_code=500, detail=f"Snapshot error: {e}")
+
+    except HTTPException:
+        # Re-raise clean FastAPI errors
+        raise
+
+    except Exception as e:
+        logging.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+
+@router.post("/run_snaphot")
+async def create_snapshot(
+    request: RunScriptRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    store: SessionStore = Depends(get_session_store),
+    ws: WebsockifyService = Depends(get_websockify_service),
+): ...

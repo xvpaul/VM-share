@@ -2,6 +2,7 @@
 import platform, shutil, subprocess, os, tempfile, time, json, re, socket
 import configs.vm_profiles as vm_profiles
 import configs.log_config as logs
+from configs.config import SNAPSHOTS_PATH
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
@@ -387,150 +388,58 @@ class QemuOverlayManager:
             "pid": qemu_pid,
             "started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
-    # =========================
-    #  SNAPSHOTS LOGIC
-    # =========================
-        # ---- Online snapshot helpers (QMP/HMP) ----
-    def _pidfile_path(self) -> Path:
-        return RUN_DIR / f"qemu-{self.vmid}.pid"
+   
+    def create_disk_snapshot(self, name: str) -> Path:
+        """
+        Create an *external* qcow2 snapshot file (disk-only).
+        Stored in SNAPSHOTS_PATH for persistence.
+        """
+        overlay = self.overlay_path()
+        if not overlay.exists():
+            raise FileNotFoundError(f"Overlay not found: {overlay}")
 
-    def _is_running(self) -> tuple[bool, int | None]:
-        pidfile = self._pidfile_path()
-        if not pidfile.exists():
-            return (False, None)
-        try:
-            pid = int(pidfile.read_text().strip())
-        except Exception:
-            return (False, None)
-        return (Path(f"/proc/{pid}").exists(), pid if Path(f"/proc/{pid}").exists() else None)
+        snapshot_file = SNAPSHOTS_PATH / f"{name}.qcow2"
 
-    def _qmp_path(self) -> Path:
-        _, qmp = self._socket_paths(self.vmid)
-        return qmp
+        cmd = [
+            "qemu-img", "create", "-f", "qcow2",
+            "-b", str(overlay),
+            "-F", "qcow2",
+            str(snapshot_file)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise OnlineSnapshotError(
+                f"Failed to create external snapshot {name}:\n{result.stderr}"
+            )
 
-    def _qmp_cmd(self, cmd: dict, timeout: float = 4.0) -> dict:
-        """Send a single QMP command and return its reply (dict)."""
-        qmp_sock = str(self._qmp_path())
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        try:
-            s.connect(qmp_sock)
-            _ = s.recv(65536)  # greeting
-            s.sendall(json.dumps({"execute": "qmp_capabilities"}).encode() + b"\r\n")
-            _ = s.recv(65536)
+        logging.info(f"[snap] Created external snapshot '{name}' at {snapshot_file}")
+        return snapshot_file
 
-            s.sendall(json.dumps(cmd).encode() + b"\r\n")
-            buf = b""
-            while True:
-                try:
-                    part = s.recv(65536)
-                    if not part:
-                        break
-                    buf += part
-                    if b"\n" in part:
-                        break
-                except socket.timeout:
-                    break
-        finally:
-            try:
-                s.close()
-            except Exception:
-                pass
+    def list_disk_snapshots(self) -> list[dict]:
+        """List internal qcow2 snapshots (disk-only)."""
+        overlay = self.overlay_path()
+        cmd = ["qemu-img", "snapshot", "-l", str(overlay)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise OnlineSnapshotError(f"Failed to list snapshots:\n{result.stderr}")
 
-        # Parse last JSON line
-        for line in buf.decode(errors="ignore").splitlines()[::-1]:
-            line = line.strip()
-            if line.startswith("{"):
-                try:
-                    return json.loads(line)
-                except Exception:
-                    continue
-        return {"error": {"desc": f"no QMP reply for {cmd}"}}
-
-    def _hmp(self, hmp_cmd: str, timeout: float = 4.0) -> str:
-        """Run an HMP command via QMP."""
-        resp = self._qmp_cmd(
-            {"execute": "human-monitor-command", "arguments": {"command-line": hmp_cmd}},
-            timeout=timeout,
-        )
-        if "error" in resp:
-            raise OnlineSnapshotError(resp["error"].get("desc", "HMP error"))
-        return resp.get("return", "")
-
-    _SNAP_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-    def _sanitize_snap(self, name: str) -> str:
-        if not name or not self._SNAP_RE.match(name):
-            raise ValueError("Invalid snapshot name. Use 1–64 chars: letters, digits, '.', '_', '-'")
-        return name
-
-    def _require_online(self):
-        running, _ = self._is_running()
-        if not running:
-            raise OnlineSnapshotError("VM is not running; online snapshots require a live QMP session.")
-        if not self._qmp_path().exists():
-            raise OnlineSnapshotError("QMP socket not found; ensure QEMU launched with -qmp unix:...,server,nowait")
-
-    # =========================
-    # ONLINE SNAPSHOTS ONLY
-    # =========================
-
-    def list_snapshots(self) -> dict:
-        """Return {'mode':'online','snapshots':[{'name': str, 'current': bool}]}"""
-        self._require_online()
-        out = self._hmp("info snapshots")
-        snaps = []
-        for ln in out.splitlines():
-            ln = ln.rstrip()
-            if not ln or ln.lower().startswith(("id", "tag", "none")):
+        snapshots = []
+        for line in result.stdout.splitlines():
+            # Skip header lines, parse: ID TAG VM SIZE DATE VM CLOCK
+            if line.strip().startswith("ID") or not line.strip():
                 continue
-            # Lines can start with optional "*" for current, then an ID, then TAG
-            m = re.match(r"^\s*(\*)?\s*\d+\s+([^\s]+)", ln)
-            if m:
-                snaps.append({"name": m.group(2), "current": bool(m.group(1))})
-        return {"mode": "online", "snapshots": snaps}
+            parts = line.split()
+            if len(parts) >= 2:
+                snapshots.append({"id": parts[0], "tag": parts[1]})
+        return snapshots
 
-    def create_snapshot(self, name: str, *, quiesce: bool = False, replace: bool = False) -> dict:
-        """
-        Create an online snapshot (VM + device state).
-        - quiesce=True: 'stop' CPU around save for extra consistency, then 'cont'
-        - replace=True: delete an existing snapshot with the same name first
-        """
-        self._require_online()
-        name = self._sanitize_snap(name)
-        try:
-            if replace:
-                try:
-                    self._hmp(f"delvm {name}")
-                except OnlineSnapshotError:
-                    pass
-            if quiesce:
-                self._hmp("stop")
-            self._hmp(f"savevm {name}")
-            return {"mode": "online", "name": name, "status": "created"}
-        finally:
-            if quiesce:
-                try:
-                    self._hmp("cont")
-                except OnlineSnapshotError:
-                    # if cont fails, surface it in logs but keep create result returned
-                    logging.warning("Failed to 'cont' after quiesced savevm.")
-
-    def delete_snapshot(self, name: str) -> dict:
-        """Delete an online snapshot."""
-        self._require_online()
-        name = self._sanitize_snap(name)
-        self._hmp(f"delvm {name}")
-        return {"mode": "online", "name": name, "status": "deleted"}
-
-    def revert_snapshot(self, name: str, *, pause: bool = False) -> dict:
-        """
-        Revert to an online snapshot (RAM + device state).
-        - pause=True: 'stop' before loadvm and keep paused; caller may 'cont' later.
-        """
-        self._require_online()
-        name = self._sanitize_snap(name)
-        if pause:
-            self._hmp("stop")
-        self._hmp(f"loadvm {name}")
-        return {"mode": "online", "name": name, "status": "reverted", "paused": pause}
-
+    def delete_disk_snapshot(self, name: str) -> None:
+        """Delete a qcow2 internal snapshot."""
+        overlay = self.overlay_path()
+        cmd = ["qemu-img", "snapshot", "-d", name, str(overlay)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise OnlineSnapshotError(
+                f"Failed to delete snapshot {name}:\n{result.stderr}"
+            )
+        logging.info(f"[snap] Deleted disk snapshot '{name}' for {overlay}")

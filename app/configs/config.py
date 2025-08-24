@@ -66,3 +66,5 @@ VM_PROFILES = {
         # "base_image": Path("/root/myapp/custom/{uid}.iso"), <---- prev
     }
 }
+
+SNAPSHOTS_PATH = Path("/root/myapp/snapshots")
