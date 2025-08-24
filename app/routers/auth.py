@@ -222,6 +222,12 @@ async def me(user: User = Depends(get_current_user)):
     logger.info(f"VM_share/app/routers/auth.py: /me endpoint called by user '{user.login}' (id={user.id})")
     return {"id": user.id, "login": user.login, "role": user.role}
 
+@router.get("/user_info")
+async def me(store = Depends(get_session_store)):
+    logger.info(f"VM_share/app/routers/auth.py: /user_info endpoint called by user '{user.login}' (id={user.id})")
+    os_type = store.vmid
+    return {"os_type": os_type}
+
 
 # @router.post("/token-json")
 # def login_token_json(payload: LoginJSON, db: Session = Depends(get_db)):

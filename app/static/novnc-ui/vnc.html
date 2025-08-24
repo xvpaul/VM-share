@@ -154,12 +154,12 @@
 
     async function loadOS() {
       try {
-        const res = await fetch('/user_info', { credentials: 'same-origin' });
+        const res = await fetch('/auth/user_info', { credentials: 'same-origin' });
         const ct = res.headers.get('content-type') || '';
         let os = '';
         if (ct.includes('application/json')) {
           const j = await res.json();
-          os = j.os || j.OS || j.distro || j.name || '';
+          os = j.os_type;
         } else {
           os = (await res.text()).trim();
         }
