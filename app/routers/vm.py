@@ -1,6 +1,5 @@
 # /app/routers/vm.py
-import secrets
-import logging
+import secrets, logging, os
 from pathlib import Path
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,6 +15,31 @@ from methods.database.models import User
 from methods.manager.SessionManager import get_session_store, SessionStore
 from methods.manager import get_websockify_service
 from methods.manager.WebsockifyService import WebsockifyService
+
+import configs.log_config as logs
+
+"""
+Logging configuration 
+"""
+
+log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
+
+try:
+    os.makedirs(logs.LOG_DIR, exist_ok=True)
+    logging.basicConfig(
+        filename=log_file_path,
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs)05d %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
+
+except Exception as e:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs)05d %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
+    logging.error(f"Failed to initialize file logging: {e}")
 
 
 router = APIRouter()
