@@ -195,7 +195,7 @@
       b.disabled = true; b.textContent = 'Snapshotting…';
       try {
         // Prefer POST; fall back to GET
-        console.log(JSON.stringify({ os_type: currentOsType }))
+        alert(body)
         let res = fetch('/vm/snapshot', {
                   method: 'POST',
                   credentials: 'same-origin',
