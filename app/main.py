@@ -2,6 +2,31 @@
 from contextlib import asynccontextmanager
 import os, asyncio, logging
 from pathlib import Path
+import configs.log_config as logs
+
+"""
+Logging configuration 
+"""
+
+log_file_path = os.path.join(logs.LOG_DIR, logs.LOG_NAME)
+
+try:
+    os.makedirs(logs.LOG_DIR, exist_ok=True)
+    logging.basicConfig(
+        filename=log_file_path,
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs)05d %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
+
+except Exception as e:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s.%(msecs)05d %(message)s',
+        datefmt='%Y-%m-%d %H-%M-%S',
+    )
+    logging.error(f"Failed to initialize file logging: {e}")
+
 
 # ---- load .env FIRST (before importing modules that read env) ----
 from dotenv import load_dotenv
