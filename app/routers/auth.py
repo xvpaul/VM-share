@@ -224,8 +224,8 @@ async def me(user: User = Depends(get_current_user)):
 
 @router.get("/user_info")
 async def me(user: User = Depends(get_current_user), store = Depends(get_session_store)):
-    logger.info(f"VM_share/app/routers/auth.py: /user_info endpoint called by user '{user.login}' (id={user.id})")
     os_type = store.vmid
+    logger.info(f"VM_share/app/routers/auth.py: /user_info endpoint called by user '{user.login}' (id={user.id}) {os_type}")
     return {"os_type": os_type}
 
 
