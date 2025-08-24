@@ -170,7 +170,7 @@ async def create_snapshot(
 ):
     """
     Create a disk-only snapshot of a running VM's overlay.
-    Snapshot name: {user.id}__{os_type}__{vmid}
+    Snapshot name: {user.id}__{os_type}__{vmid}.qcow2
     """
     vmid = None
     logger.info("[snapshot] started")

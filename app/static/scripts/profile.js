@@ -358,15 +358,22 @@ promForm?.addEventListener('submit', async (e) => {
 });
 
 // --- Snapshots ---
+// Helper: extract os_type (2nd segment) from "{user}__{os_type}__{vmid}[.ext]"
+function extractOsTypeFromSnapshotId(id) {
+  if (!id) return 'unknown';
+  const base = String(id).split(/[\\/]/).pop();     // strip any path
+  const parts = base.split('__');                   // ["user","os_type","vmid.ext"]
+  return parts.length >= 3 && parts[1] ? parts[1] : (typeof currentOsType === 'string' && currentOsType) ? currentOsType : 'unknown';
+}
 
-// Helper: start VM from a snapshot entry using RUN_VM_ENDPOINT
+// Start VM from a snapshot entry using RUN_VM_ENDPOINT
 async function runSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
-    const snapshotId = s.name || s.id || s.path || s.file;
+    const snapshotId = s.name || s.id || s.path || s.file; // prefer filename
     if (!snapshotId) throw new Error('No snapshot identifier');
 
-    const osType = (typeof currentOsType === 'string' && currentOsType) ? currentOsType : 'unknown';
+    const osType = extractOsTypeFromSnapshotId(snapshotId);
 
     const res = await fetch(RUN_VM_ENDPOINT, {
       method: 'POST',
@@ -387,6 +394,7 @@ async function runSnapshot(s, btn) {
         if (t) msg = t;
       }
     } catch {}
+
     toast(msg, res.ok ? 'ok' : 'err');
     setStatus(res.ok ? 'Starting…' : 'Error', res.ok ? 'ok' : 'err');
   } catch (e) {
@@ -396,6 +404,7 @@ async function runSnapshot(s, btn) {
     if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
   }
 }
+
 
 function renderSnapshots(list) {
   const table = document.createElement('table');
