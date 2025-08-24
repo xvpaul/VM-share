@@ -195,7 +195,12 @@
       b.disabled = true; b.textContent = 'Snapshotting…';
       try {
         // Prefer POST; fall back to GET
-        let res = await fetch('/vm/snapshot', { method: 'POST', credentials: 'same-origin' });
+        let res = fetch('/vm/snapshot', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ os_type: currentOsType }) // supply from frontend
+                });
         if (!res.ok) res = await fetch('/vm/snapshot', { credentials: 'same-origin' });
         const ok = res.ok;
         let msg = 'Snapshot created';
