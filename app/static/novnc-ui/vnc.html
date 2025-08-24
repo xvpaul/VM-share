@@ -196,7 +196,7 @@
       try {
         // Prefer POST; fall back to GET
         let res = await fetch('/snapshot', { method: 'POST', credentials: 'same-origin' });
-        if (!res.ok) res = await fetch('/snapshot', { credentials: 'same-origin' });
+        if (!res.ok) res = await fetch('/vm/snapshot', { credentials: 'same-origin' });
         const ok = res.ok;
         let msg = 'Snapshot created';
         try {
