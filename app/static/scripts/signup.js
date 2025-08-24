@@ -54,7 +54,7 @@ document
     e.preventDefault();
     const login = e.target.querySelector("input[name='login']").value;
     const password = e.target.querySelector("input[name='password']").value;
-    alert(login, password)
+    // alert(login, password)
     try {
       const res = await fetch("/auth/register", {
         method: "POST",
@@ -63,7 +63,7 @@ document
         body: JSON.stringify({ login, password }),
       });
       const data = await res.json();
-alert(JSON.stringify(data, null, 2)); // formatted JSON      if (!res.ok) throw new Error(data.detail || "Registration failed");
+// alert(JSON.stringify(data, null, 2)); // formatted JSON      if (!res.ok) throw new Error(data.detail || "Registration failed");
       console.log("Signed up:", data);
       window.location.href = "/";
     } catch (err) {
