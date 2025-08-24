@@ -28,6 +28,9 @@ class RunScriptRequest(BaseModel):
     os_type: str
     snapshot: str | None = None  # optional, used by /run_snaphot
 
+class SnapshotRequest(BaseModel):
+    os_type: str
+    vmid: str | None = None  # allow FE to pass vmid; fallback to store if omitted
 
 @router.post("/run-script")
 async def run_vm_script(
@@ -166,59 +169,43 @@ async def run_custom_iso(
 
 @router.post("/snapshot")
 async def create_snapshot(
-    request: RunScriptRequest,
+    request: SnapshotRequest,
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
 ):
-    """
-    Create a disk-only snapshot of a running VM's overlay.
-    Snapshot name: {user.id}__{os_type}__{vmid}.qcow2
-    """
     vmid = None
-    logger.info("[snapshot] started")
     try:
-        # Validate input
-        os_type = getattr(request, "os_type", None)
+        os_type = (request.os_type or "").strip()
         if not os_type:
-            raise HTTPException(status_code=400, detail="Missing os_type in request")
+            raise HTTPException(status_code=400, detail="Missing os_type")
 
-        session = store.get_running_by_user(user.id)
-        if not session:
-            raise HTTPException(status_code=404, detail=f"No active VM found for user {user.id}")
-
-        vmid = session.get("vmid")
+        # Prefer vmid from client (page knows which VM it's on)
+        vmid = (request.vmid or "").strip()
         if not vmid:
-            raise HTTPException(status_code=500, detail="Session missing vmid")
+            sess = store.get_running_by_user(user.id) or {}
+            vmid = sess.get("vmid")
+        if not vmid:
+            raise HTTPException(status_code=404, detail="No running VM found for this user")
 
-        # Build snapshot name
-        snapshot_name = f"{user.id}__{os_type}__{vmid}"
+        # Require VM to be running (QMP socket must exist)
+        # (We instantiate a manager just to compute the socket paths)
+        mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
+        _, qmp_sock = mgr._socket_paths(vmid)
+        if not qmp_sock.exists():
+            # VM not running; we don't attempt offline copy because overlays may be purged
+            raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        # Perform snapshot
-        mgr = QemuOverlayManager(user_id=user.id, vmid=vmid, os_type=os_type)
-        mgr.create_disk_snapshot(snapshot_name)
+        snap_name = f"{user.id}__{os_type}__{vmid}"
+        out_path = mgr.create_disk_snapshot(snap_name)
 
-        logger.info(
-            "[snapshot] success user=%s vmid=%s snapshot=%s",
-            user.id, vmid, snapshot_name
-        )
-        return {"status": "ok", "snapshot": snapshot_name}
-
-    except FileNotFoundError as e:
-        logger.error("[snapshot] overlay not found user=%s vmid=%s error=%s", user.id, vmid, e)
-        raise HTTPException(status_code=404, detail=f"Overlay not found: {e}")
-
-    except OnlineSnapshotError as e:
-        logger.error("[snapshot] failed user=%s vmid=%s error=%s", user.id, vmid, e)
-        raise HTTPException(status_code=500, detail=f"Snapshot error: {e}")
+        logger.info("[snapshot] ok user=%s vmid=%s out=%s", user.id, vmid, out_path)
+        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path)}
 
     except HTTPException:
-        # Re-raise clean FastAPI errors
         raise
-
     except Exception as e:
-        logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
-
+        logger.exception("[snapshot] failed user=%s vmid=%s", user.id, vmid)
+        raise HTTPException(status_code=500, detail=f"Snapshot error: {e}")
 
 @router.post("/run_snaphot")
 async def run_snapshot(
