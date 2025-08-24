@@ -188,7 +188,7 @@ async def create_snapshot(
             raise HTTPException(status_code=500, detail="Session missing vmid")
 
         # Build snapshot name
-        snapshot_name = f"{os_type}__{vmid}__{user.id}"
+        snapshot_name = f"{user.id}__{os_type}__{vmid}"
 
         # Perform snapshot
         mgr = QemuOverlayManager(user_id=user.id, vmid=vmid, os_type=os_type)
@@ -219,6 +219,16 @@ async def create_snapshot(
 
 @router.post("/run_snaphot")
 async def run_snapshot(
+    request: RunScriptRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    store: SessionStore = Depends(get_session_store),
+    ws: WebsockifyService = Depends(get_websockify_service),
+): ...
+
+
+@router.get("/get_user_snapshots")
+async def get_user_snapshots(
     request: RunScriptRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

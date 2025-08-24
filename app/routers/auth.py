@@ -223,11 +223,21 @@ async def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "login": user.login, "role": user.role}
 
 @router.get("/user_info")
-async def me(user: User = Depends(get_current_user), store = Depends(get_session_store)):
-    sess = store.get_running_by_user(user.id) 
-    os_type = sess["os_type"]
-    logger.info(f"VM_share/app/routers/auth.py: /user_info endpoint called by user '{user.login}' (id={user.id}) {os_type}")
-    return {"os_type": os_type}
+async def me(
+    user: User = Depends(get_current_user),
+    store: SessionStore = Depends(get_session_store),
+):
+    try:
+        sess = store.get_running_by_user(user.id) or {}
+        os_type = sess.get("os_type") or sess.get("os") or "Virtual Machine"
+        vmid = sess.get("vmid")
+        logger.info("[user_info] user=%s vmid=%s os=%s", user.id, vmid, os_type)
+        # return both keys: frontend reads `os`, backend can use `os_type`
+        return {"os": os_type, "os_type": os_type, "vmid": vmid}
+    except Exception as e:
+        logger.exception("[user_info] failed for user=%s", user.id)
+        # keep it simple and always JSON
+        return {"os": "Virtual Machine", "os_type": None, "vmid": None}
 
 
 # @router.post("/token-json")
