@@ -60,10 +60,10 @@ class QemuOverlayManager:
         qmp = RUN_DIR / f"qmp-{vmid}.sock"
         return vnc, qmp
 
-    def boot_vm(self, vmid: str, memory_mb: int = None, wait_timeout_s: float = 10.0) -> dict:
-        overlay = self.overlay_path()
-        if not overlay.exists():
-            error_msg = f"Overlay missing for user {self.user_id}: {overlay}"
+    def boot_vm(self, vmid: str, memory_mb: int = None, wait_timeout_s: float = 10.0, drive_path: str | None = None) -> dict:
+        image = Path(drive_path) if drive_path else self.overlay_path()
+        if not image.exists():
+            error_msg = f"Drive image missing for user {self.user_id}: {image}"
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
@@ -75,7 +75,6 @@ class QemuOverlayManager:
 
         mem = str(memory_mb or self.profile["default_memory"])
 
-        # NEW: keep artifacts together and poll for this pidfile
         pidfile = RUN_DIR / f"qemu-{vmid}.pid"
         try:
             if pidfile.exists():
@@ -85,17 +84,16 @@ class QemuOverlayManager:
 
         cmd = [
             "qemu-system-x86_64",
-            # "-enable-kvm", # <----- added to test <------- not working
+            # "-enable-kvm",
             "-m", mem,
-            "-drive", f"file={overlay},format=qcow2,if=virtio,cache=writeback,discard=unmap",
+            "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
             "-vnc", f"unix:{vnc_sock}",
             "-qmp", f"unix:{qmp_sock},server,nowait",
             "-display", "none",
             "-daemonize",
-            "-pidfile", str(pidfile),  # NEW: ask QEMU to write its PID
+            "-pidfile", str(pidfile),
         ]
-        
 
         logger.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -109,7 +107,6 @@ class QemuOverlayManager:
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-        # NEW: race-proof wait for pidfile to appear (qemu writes it after daemonize)
         deadline = time.time() + wait_timeout_s
         qemu_pid = None
         last_exc = None
@@ -136,12 +133,13 @@ class QemuOverlayManager:
             "user_id": self.user_id,
             "vmid": vmid,
             "os_type": self.os_type,
-            "overlay": str(overlay),
+            "overlay": str(image),            # <- reflect the actual image used
             "vnc_socket": str(vnc_sock),
             "qmp_socket": str(qmp_sock),
             "started_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-            "pid": qemu_pid,  # NEW: included in return
+            "pid": qemu_pid,
         }
+
     
     # Replace your current peek_iso with this:
     @staticmethod
