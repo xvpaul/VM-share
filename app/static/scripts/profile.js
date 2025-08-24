@@ -7,7 +7,7 @@
 // Endpoints
 const PROM_PROXY = '/metrics';
 const APP_JSON = '/metrics_json';
-const SNAPSHOTS_ENDPOINT = '/get_user_snapshots';
+const SNAPSHOTS_ENDPOINT = '/vm/get_user_snapshots';
 const AUTH_ME = '/auth/me';
 const AUTH_LOGOUT = '/auth/logout';
 const logoutBtn = document.getElementById('logout-btn');
