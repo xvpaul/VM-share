@@ -232,7 +232,7 @@ async def run_snapshot(
 async def get_user_snapshots(user: User = Depends(get_current_user)):
     try:
         items = []
-        for p in config.SNAPSHOTS_DIR.glob(f"{user.id}__*"):
+        for p in config.SNAPSHOTS_PATH.glob(f"{user.id}__*"):
             if not p.is_file():
                 continue
             stat = p.stat()
