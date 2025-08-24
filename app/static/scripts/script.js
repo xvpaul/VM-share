@@ -263,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // =====================
   // Signup redirect setup for VM actions
   // =====================
-  const SIGNUP_URL = "/signup.html"; // redirect target for unauthenticated VM clicks
+  const SIGNUP_URL = "/signup"; // redirect target for unauthenticated VM clicks
 
   // Helper: check auth and redirect if needed
   async function ensureAuthOrRedirect() {
