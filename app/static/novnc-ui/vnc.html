@@ -196,6 +196,7 @@ document.querySelector('#btn-shot').addEventListener('click', async () => {
   b.disabled = true; 
   b.textContent = 'Snapshotting…';
   try {
+    console.log("snapshot os_type =", currentOsType);
     const res = await fetch('/vm/snapshot', {
       method: 'POST',
       credentials: 'same-origin',
