@@ -172,6 +172,7 @@ async def create_snapshot(
     Snapshot name: {os_type}__{vmid}__{user_id}
     """
     vmid = None
+    logger.info("[snapshot] started")
     try:
         # Validate input
         os_type = getattr(request, "os_type", None)
