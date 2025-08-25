@@ -187,16 +187,15 @@ def _img_actual_mb(p: Path) -> int:
             n = p.stat().st_size
     except Exception:
         n = p.stat().st_size
-    return (n + (1024*1024 - 1)) // (1024*1024)  # ceil bytes→MiB
+    return (n + (1024*1024 - 1)) // (1024*1024)
 
 def _sum_user_snapshots_mb(user_id: int) -> tuple[int, list[tuple[Path, int]]]:
     snap_dir = Path(SNAPSHOTS_PATH)
     total = 0
     details: list[tuple[Path,int]] = []
+    pattern = f"{user_id}__*.qcow2"
     try:
-        pattern = f"{user_id}__*.qcow2"
-        files = list(snap_dir.glob(pattern))
-        files.sort()
+        files = sorted(snap_dir.glob(pattern))
         for f in files:
             try:
                 sz = _img_actual_mb(f)
@@ -207,6 +206,7 @@ def _sum_user_snapshots_mb(user_id: int) -> tuple[int, list[tuple[Path, int]]]:
     except Exception as e:
         logger.warning("[snapshot] listing error for %s: %s", snap_dir, e)
     return total, details
+
 
 @router.post("/snapshot")
 async def create_snapshot(
@@ -226,15 +226,15 @@ async def create_snapshot(
         if not vmid:
             sess = store.get_running_by_user(user.id) or {}
             vmid = sess.get("vmid")
+
+        logger.info("[snapshot] request user=%s os=%s vmid=%s", user.id, os_type, vmid)
+
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
-
-        # Require VM running (we rely on QMP in create_disk_snapshot)
         _, qmp_sock = mgr._socket_paths(vmid)
-        logger.info("[snapshot] request user=%s os=%s vmid=%s qmp=%s exists=%s",
-                    user.id, os_type, vmid, qmp_sock, qmp_sock.exists())
+        logger.info("[snapshot] qmp_sock=%s exists=%s", qmp_sock, qmp_sock.exists())
         if not qmp_sock.exists():
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
@@ -244,7 +244,7 @@ async def create_snapshot(
             raise HTTPException(status_code=404, detail="User not found")
         cap_mb = int(db_user.snapshot_storage_capacity or 0)
 
-        # Sum all existing snapshots for this user
+        # Current total across ALL this user's snapshots
         before_total_mb, files_detail = _sum_user_snapshots_mb(user.id)
         logger.info("[snapshot] user=%s current_total=%sMB cap=%sMB dir=%s",
                     user.id, before_total_mb, cap_mb, SNAPSHOTS_PATH)
@@ -253,47 +253,42 @@ async def create_snapshot(
 
         # Target filename for this snapshot
         out_path = Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2"
-        old_size_mb = _img_actual_mb(out_path) if out_path.exists() else 0
-        logger.info("[snapshot] target=%s existed=%s old_size=%sMB",
-                    out_path, out_path.exists(), old_size_mb)
+        prev_exists = out_path.exists()
+        prev_size_mb = _img_actual_mb(out_path) if prev_exists else 0
+        logger.info("[snapshot] target=%s existed=%s prev_size=%sMB",
+                    out_path, prev_exists, prev_size_mb)
 
-        # If file exists, move aside so we can restore if over quota
-        bak_path = None
-        if out_path.exists():
-            bak_path = out_path.with_suffix(out_path.suffix + ".bak")
-            try:
-                if bak_path.exists():
-                    bak_path.unlink()
-                out_path.replace(bak_path)
-                logger.info("[snapshot] backed up existing to %s", bak_path)
-            except Exception as e:
-                logger.warning("[snapshot] backup failed, will overwrite: %s", e)
-                # fall through; create will overwrite
+        # Soft pre-check (fast fail if absolutely no room)
+        if before_total_mb >= cap_mb:
+            raise HTTPException(
+                status_code=413,
+                detail=f"No snapshot space available. Used={before_total_mb} MB, Cap={cap_mb} MB."
+            )
 
-        # Create the new snapshot
+        # Create the snapshot (live backup). This writes/overwrites `out_path`.
         snap_name = f"{user.id}__{os_type}__{vmid}"
         new_path = mgr.create_disk_snapshot(snap_name)
 
-        # Measure new size & compute new total (replace aware)
+        # Measure created file and recount authoritative total across disk
         new_size_mb = _img_actual_mb(new_path) if new_path.exists() else 0
-        after_total_mb = before_total_mb - old_size_mb + new_size_mb
+        after_total_mb, after_files = _sum_user_snapshots_mb(user.id)
+        logger.info("[snapshot] new_file=%s new_size=%sMB after_total=%sMB cap=%sMB",
+                    new_path, new_size_mb, after_total_mb, cap_mb)
+        for f, sz in after_files:
+            logger.info("[snapshot] after: %s => %sMB", f, sz)
 
-        logger.info("[snapshot] new_file=%s new_size=%sMB before_total=%sMB after_total=%sMB cap=%sMB",
-                    new_path, new_size_mb, before_total_mb, after_total_mb, cap_mb)
-
-        # Enforce cap: if exceeded, remove new and restore backup
+        # Enforce cap based on actual total; if exceeded, remove just-created file and recount
         if after_total_mb > cap_mb:
             try:
                 if new_path.exists():
                     new_path.unlink()
-                logger.info("[snapshot] over cap, removed new snapshot %s", new_path)
+                    logger.info("[snapshot] over cap, removed new snapshot %s", new_path)
             finally:
-                if bak_path and bak_path.exists():
-                    try:
-                        bak_path.replace(out_path)
-                        logger.info("[snapshot] restored previous snapshot %s", out_path)
-                    except Exception as e:
-                        logger.warning("[snapshot] failed to restore backup: %s", e)
+                final_total_mb, final_files = _sum_user_snapshots_mb(user.id)
+                db_user.snapshot_stored = final_total_mb
+                db.commit()
+                logger.info("[snapshot] quota reject user=%s final_total=%sMB cap=%sMB removed=%s",
+                            user.id, final_total_mb, cap_mb, new_path.name)
             deficit = after_total_mb - cap_mb
             raise HTTPException(
                 status_code=413,
@@ -301,7 +296,7 @@ async def create_snapshot(
                         f"Current={before_total_mb} MB, New={new_size_mb} MB, Cap={cap_mb} MB.")
             )
 
-        # Persist: store the authoritative total we just computed
+        # Success: persist the authoritative on-disk total
         db_user.snapshot_stored = after_total_mb
         db.commit()
 
@@ -325,6 +320,7 @@ async def create_snapshot(
     except Exception as e:
         logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
 
 @router.post("/run_snaphot")
 async def run_snapshot(
