@@ -6,7 +6,7 @@ from threading import Thread
 import os
 from pathlib import Path
 from typing import Optional
-import configs.config as VM_PROFILES
+from configs.config import VM_PROFILES
 
 logger = logging.getLogger(__name__)
 
