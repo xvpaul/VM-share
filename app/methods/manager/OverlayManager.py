@@ -363,146 +363,110 @@ class QemuOverlayManager:
             "started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
    
-    def create_disk_snapshot(self, name: str, timeout_s: int = 600) -> Path:
+    def create_disk_snapshot(self, name: str) -> Path:
         """
-        Live disk snapshot via QMP drive-backup, and WAIT until the block job completes.
-        Writes to: {SNAPSHOTS_PATH}/{user_id}__{os_type}__{vmid}.qcow2
+        Live disk-only snapshot while VM is running (via QMP drive-backup).
+        Output: {SNAPSHOTS_PATH}/{user_id}__{os_type}__{self.vmid}.qcow2
         """
         out = Path(SNAPSHOTS_PATH) / f"{self.user_id}__{self.os_type}__{self.vmid}.qcow2"
         out.parent.mkdir(parents=True, exist_ok=True)
-
-        # If target exists, remove it so QEMU creates a fresh file (no partial leftovers)
-        try:
-            if out.exists():
+        if out.exists():
+            try:
                 out.unlink()
-        except Exception as e:
-            logging.warning("[snap] Could not remove existing snapshot %s: %s", out, e)
+            except Exception as e:
+                raise OnlineSnapshotError(f"Failed to remove existing snapshot file: {out} ({e})")
 
-        # QMP socket
+        # Use QMP of the *running* VM (do not require overlay file)
         _, qmp_sock = self._socket_paths(self.vmid)
         if not qmp_sock.exists():
-            raise OnlineSnapshotError(f"QMP socket missing: {qmp_sock}")
+            # overlays may be purged when VM stops; don't attempt offline copy
+            raise OnlineSnapshotError("VM is not running (no QMP socket) — cannot create live snapshot")
 
-        def _qmp_send(sock: socket.socket, cmd: str, args: dict | None = None) -> dict:
-            payload = {"execute": cmd}
-            if args:
-                payload["arguments"] = args
-            sock.sendall((json.dumps(payload) + "\n").encode())
-            data = b""
-            # Read one JSON object (QMP uses \n-delimited)
-            sock.settimeout(5.0)
-            while True:
+        def _qmp_send(payload: dict, timeout: float = 10.0) -> dict:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(timeout)
+                s.connect(str(qmp_sock))
+                # greeting
                 try:
-                    chunk = sock.recv(65536)
-                except socket.timeout:
+                    json.loads(s.recv(4096).decode(errors="ignore") or "{}")
+                except Exception:
+                    pass
+                # enable caps
+                s.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\n").encode())
+                try:
+                    json.loads(s.recv(4096).decode(errors="ignore") or "{}")
+                except Exception:
+                    pass
+                # command
+                s.sendall((json.dumps(payload) + "\n").encode())
+                resp = s.recv(65536).decode(errors="ignore") or "{}"
+                try:
+                    return json.loads(resp)
+                except Exception:
+                    return {}
+
+        # Pick the main writable disk device from query-block
+        qb = _qmp_send({"execute": "query-block"})
+        devices = qb.get("return", []) if isinstance(qb, dict) else []
+        dev_name = None
+
+        def _drv(ins: dict) -> str:
+            if isinstance(ins.get("image"), dict):
+                return ins["image"].get("format") or ""
+            return ins.get("drv") or ""
+
+        for d in devices:
+            ins = d.get("inserted") or {}
+            if not ins:
+                continue
+            # skip cdrom/ro devices
+            if ins.get("ro") or ins.get("removable"):
+                continue
+            fmt = _drv(ins).lower()
+            if fmt in ("qcow2", "raw"):            # typical root disk formats
+                dev_name = d.get("device")
+                if dev_name:
                     break
-                if not chunk:
-                    break
-                data += chunk
-                if b"\n" in chunk:
-                    break
-            try:
-                return json.loads(data.decode() or "{}")
-            except Exception:
-                return {}
 
-        # Connect QMP
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(10.0)
-        s.connect(str(qmp_sock))
+        if not dev_name and devices:
+            # last resort: first device with a name
+            dev_name = next((d.get("device") for d in devices if d.get("device")), None)
 
-        try:
-            # Greeting
-            try:
-                _ = s.recv(4096)
-            except Exception:
-                pass
+        if not dev_name:
+            raise OnlineSnapshotError("Unable to determine block device for drive-backup")
 
-            _qmp_send(s, "qmp_capabilities")
-
-            # Pick a writable non-removable device (usually the root disk)
-            qb = _qmp_send(s, "query-block")
-            devices = qb.get("return", []) if isinstance(qb, dict) else []
-            dev_name = None
-            for d in devices:
-                ins = d.get("inserted") or {}
-                if ins.get("ro") or ins.get("removable"):
-                    continue
-                # Prefer qcow2/raw
-                fmt = ""
-                if isinstance(ins.get("image"), dict):
-                    fmt = (ins["image"].get("format") or "").lower()
-                else:
-                    fmt = (ins.get("drv") or "").lower()
-                if fmt in ("qcow2", "raw") or True:
-                    dev_name = d.get("device") or d.get("qdev")
-                    if dev_name:
-                        break
-
-            if not dev_name:
-                raise OnlineSnapshotError("No suitable writable block device found for backup")
-
-            logging.info("[snap] Starting drive-backup vmid=%s device=%s -> %s", self.vmid, dev_name, out)
-
-            # Start the backup. Let QEMU create the target (no 'mode':'existing').
-            # Note: 'sync':'full' takes a full copy. You can add 'speed' (bytes/sec) if desired.
-            start = _qmp_send(s, "drive-backup", {
+        job_id = f"backup-{self.vmid}-{int(time.time())}"
+        start = _qmp_send({
+            "execute": "drive-backup",
+            "arguments": {
                 "device": dev_name,
+                "job-id": job_id,
                 "target": str(out),
                 "format": "qcow2",
                 "sync": "full",
-                "on-source-error": "report",
-                "on-target-error": "stop",
-            })
+                "auto-finalize": True,
+                "auto-dismiss": True,
+            }
+        })
+        if isinstance(start, dict) and "error" in start:
+            raise OnlineSnapshotError(f"drive-backup start failed: {start['error']}")
 
-            if "error" in start:
-                raise OnlineSnapshotError(f"drive-backup start failed: {start['error']}")
+        # Wait for job completion (auto-dismiss removes it from the list)
+        deadline = time.time() + 300
+        while time.time() < deadline:
+            q = _qmp_send({"execute": "query-block-jobs"})
+            jobs = q.get("return", []) if isinstance(q, dict) else []
+            if not any(j.get("id") == job_id for j in jobs):
+                break
+            time.sleep(0.5)
+        else:
+            raise OnlineSnapshotError("drive-backup timed out")
 
-            # Wait for completion: poll query-block-jobs until the job for our device disappears
-            deadline = time.time() + timeout_s
-            last_status = None
-            while True:
-                if time.time() > deadline:
-                    raise OnlineSnapshotError(f"drive-backup timed out after {timeout_s}s")
+        if not out.exists() or out.stat().st_size == 0:
+            raise OnlineSnapshotError("Snapshot file missing/empty after drive-backup")
 
-                jobs = _qmp_send(s, "query-block-jobs")
-                arr = jobs.get("return", []) if isinstance(jobs, dict) else []
-                # Find our job by device
-                job = None
-                for j in arr:
-                    if j.get("device") == dev_name:
-                        job = j
-                        break
-
-                if job is None:
-                    # No job => completed (or never started, but we handled errors above)
-                    break
-
-                status = job.get("status")
-                if status != last_status:
-                    logging.info("[snap] drive-backup vmid=%s device=%s status=%s progress=%s%%",
-                                 self.vmid, dev_name, status, job.get("progress", {}).get("current", "n/a"))
-                    last_status = status
-
-                if status in ("pending", "ready", "running", "paused"):
-                    time.sleep(0.2)
-                    continue
-                elif status in ("aborting", "paused", "concluded"):
-                    # Some QEMU versions use 'concluded' briefly before disappearance
-                    time.sleep(0.2)
-                    continue
-                else:
-                    # Unknown / error state? Fail safe.
-                    raise OnlineSnapshotError(f"drive-backup unexpected status: {status}")
-
-            logging.info("[snap] Live disk snapshot completed via QMP: %s", out)
-            return out
-
-        finally:
-            try:
-                s.close()
-            except Exception:
-                pass
+        logger.info(f"[snap] Live disk snapshot created via QMP: {out}")
+        return out
 
     def list_disk_snapshots(self) -> list[dict]:
         """List internal qcow2 snapshots (disk-only)."""

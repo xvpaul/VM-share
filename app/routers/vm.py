@@ -175,11 +175,96 @@ def _bytes_to_mb(n: int) -> int:
     # ceil(n / (1024*1024)) without floats
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
 
-def _img_actual_mb(p: Path) -> int:
-    """On-disk MiB used by qcow/raw (ceil). Prefer qemu-img actual-size."""
+def _walk_image_filename(inserted: dict) -> str | None:
+    """
+    Best-effort to extract the top-level filename from a 'query-block' inserted node.
+    Walk nested 'image' dicts until we hit a filename.
+    """
+    cur = inserted or {}
+    # Common direct spots
+    for key in ("file", "filename"):
+        if isinstance(cur.get(key), str) and cur[key]:
+            return cur[key]
+    img = cur.get("image")
+    while isinstance(img, dict):
+        for key in ("filename", "file"):
+            if isinstance(img.get(key), str) and img[key]:
+                return img[key]
+        img = img.get("image")
+    return None
+
+def _qmp_active_image_path(qmp_sock: Path, timeout: float = 8.0) -> Path | None:
+    """
+    Return the path of the writable root disk via QMP (query-block). Falls back to None.
+    """
     try:
-        r = subprocess.run(["qemu-img", "info", "--output=json", str(p)],
-                           capture_output=True, text=True)
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(str(qmp_sock))
+
+        # greeting
+        try:
+            _ = s.recv(4096)
+        except Exception:
+            pass
+
+        def _send(obj: dict) -> dict:
+            s.sendall((json.dumps(obj) + "\n").encode())
+            buf = b""
+            s.settimeout(2.0)
+            # read a line (QMP is newline-delimited JSON)
+            try:
+                while True:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    if b"\n" in chunk:
+                        break
+            except socket.timeout:
+                pass
+            try:
+                return json.loads(buf.decode() or "{}")
+            except Exception:
+                return {}
+
+        _send({"execute": "qmp_capabilities"})
+        qb = _send({"execute": "query-block"})
+        devices = qb.get("return", []) if isinstance(qb, dict) else []
+        # Prefer a non-removable, writable device (root disk)
+        for d in devices:
+            ins = d.get("inserted") or {}
+            if ins.get("ro") or ins.get("removable"):
+                continue
+            fn = _walk_image_filename(ins)
+            if fn:
+                return Path(fn)
+
+        # Fallback: any device with a filename
+        for d in devices:
+            ins = d.get("inserted") or {}
+            fn = _walk_image_filename(ins)
+            if fn:
+                return Path(fn)
+
+    except Exception:
+        return None
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+    return None
+
+def _img_actual_mb(p: Path) -> int:
+    """
+    On-disk MiB used by qcow/raw (ceil). Prefer qemu-img 'actual-size'.
+    """
+    try:
+        r = subprocess.run(
+            ["qemu-img", "info", "--output=json", str(p)],
+            capture_output=True, text=True
+        )
         if r.returncode == 0 and r.stdout:
             info = json.loads(r.stdout)
             n = int(info.get("actual-size") or info.get("virtual-size") or p.stat().st_size)
@@ -187,27 +272,9 @@ def _img_actual_mb(p: Path) -> int:
             n = p.stat().st_size
     except Exception:
         n = p.stat().st_size
-    return (n + (1024*1024 - 1)) // (1024*1024)
+    return (n + (1024*1024 - 1)) // (1024*1024)  # ceil bytes→MiB
 
-def _sum_user_snapshots_mb(user_id: int) -> tuple[int, list[tuple[Path, int]]]:
-    snap_dir = Path(SNAPSHOTS_PATH)
-    total = 0
-    details: list[tuple[Path,int]] = []
-    pattern = f"{user_id}__*.qcow2"
-    try:
-        files = sorted(snap_dir.glob(pattern))
-        for f in files:
-            try:
-                sz = _img_actual_mb(f)
-            except Exception:
-                sz = 0
-            details.append((f, sz))
-            total += sz
-    except Exception as e:
-        logger.warning("[snapshot] listing error for %s: %s", snap_dir, e)
-    return total, details
-
-
+# --- endpoint ---
 @router.post("/snapshot")
 async def create_snapshot(
     request: SnapshotRequest,
@@ -222,93 +289,103 @@ async def create_snapshot(
             raise HTTPException(status_code=400, detail="Missing os_type")
 
         # vmid from client, else from store
-        vmid = (request.vmid or "").strip()
-        if not vmid:
-            sess = store.get_running_by_user(user.id) or {}
-            vmid = sess.get("vmid")
-
+        sess = store.get_running_by_user(user.id) or {}
+        vmid = (request.vmid or "").strip() or (sess.get("vmid") or "")
         logger.info("[snapshot] request user=%s os=%s vmid=%s", user.id, os_type, vmid)
 
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
+        # Build manager + ensure VM running (QMP present)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
         _, qmp_sock = mgr._socket_paths(vmid)
         logger.info("[snapshot] qmp_sock=%s exists=%s", qmp_sock, qmp_sock.exists())
         if not qmp_sock.exists():
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        # Quota from DB
+        # User quota
         db_user = db.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
-        cap_mb = int(db_user.snapshot_storage_capacity or 0)
+        used_mb = int(db_user.snapshot_stored or 0)
+        cap_mb  = int(db_user.snapshot_storage_capacity or 0)
 
-        # Current total across ALL this user's snapshots
-        before_total_mb, files_detail = _sum_user_snapshots_mb(user.id)
-        logger.info("[snapshot] user=%s current_total=%sMB cap=%sMB dir=%s",
-                    user.id, before_total_mb, cap_mb, SNAPSHOTS_PATH)
-        for f, sz in files_detail:
-            logger.info("[snapshot] existing: %s => %sMB", f, sz)
+        # --- Resolve *source* image we snapshot from ---
+        # 1) Ground truth via QMP
+        src_path = _qmp_active_image_path(qmp_sock)
 
-        # Target filename for this snapshot
-        out_path = Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2"
-        prev_exists = out_path.exists()
-        prev_size_mb = _img_actual_mb(out_path) if prev_exists else 0
-        logger.info("[snapshot] target=%s existed=%s prev_size=%sMB",
-                    out_path, prev_exists, prev_size_mb)
+        # 2) Fallbacks using your known paths
+        if not src_path or not src_path.exists():
+            candidates = []
 
-        # Soft pre-check (fast fail if absolutely no room)
-        if before_total_mb >= cap_mb:
-            raise HTTPException(
-                status_code=413,
-                detail=f"No snapshot space available. Used={before_total_mb} MB, Cap={cap_mb} MB."
-            )
+            # session overlay (set at boot_vm)
+            ov = (sess.get("overlay") or "").strip()
+            if ov:
+                candidates.append(Path(ov))
 
-        # Create the snapshot (live backup). This writes/overwrites `out_path`.
-        snap_name = f"{user.id}__{os_type}__{vmid}"
-        new_path = mgr.create_disk_snapshot(snap_name)
+            # expected snapshot path for this vmid
+            candidates.append(Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2")
 
-        # Measure created file and recount authoritative total across disk
-        new_size_mb = _img_actual_mb(new_path) if new_path.exists() else 0
-        after_total_mb, after_files = _sum_user_snapshots_mb(user.id)
-        logger.info("[snapshot] new_file=%s new_size=%sMB after_total=%sMB cap=%sMB",
-                    new_path, new_size_mb, after_total_mb, cap_mb)
-        for f, sz in after_files:
-            logger.info("[snapshot] after: %s => %sMB", f, sz)
-
-        # Enforce cap based on actual total; if exceeded, remove just-created file and recount
-        if after_total_mb > cap_mb:
+            # overlay path by profile (prefix==os_type in your setup)
             try:
-                if new_path.exists():
-                    new_path.unlink()
-                    logger.info("[snapshot] over cap, removed new snapshot %s", new_path)
-            finally:
-                final_total_mb, final_files = _sum_user_snapshots_mb(user.id)
-                db_user.snapshot_stored = final_total_mb
-                db.commit()
-                logger.info("[snapshot] quota reject user=%s final_total=%sMB cap=%sMB removed=%s",
-                            user.id, final_total_mb, cap_mb, new_path.name)
-            deficit = after_total_mb - cap_mb
+                candidates.append(mgr.overlay_path())
+            except Exception:
+                pass
+
+            src_path = next((p for p in candidates if p and p.exists()), None)
+
+        if not src_path:
+            raise HTTPException(status_code=409, detail="Cannot locate source disk image to measure")
+
+        # Measure source size for billing
+        src_mb = _img_actual_mb(src_path)
+
+        # Log detailed size info (best-effort)
+        try:
+            qi = subprocess.run(["qemu-img", "info", "--output=json", str(src_path)],
+                                capture_output=True, text=True)
+            fmt = act = virt = statb = "n/a"
+            if qi.returncode == 0 and qi.stdout:
+                jj = json.loads(qi.stdout)
+                fmt  = jj.get("format", "?")
+                act  = jj.get("actual-size", "n/a")
+                virt = jj.get("virtual-size", "n/a")
+            try:
+                statb = src_path.stat().st_size
+            except Exception:
+                pass
+            logger.info("[snapshot] source=%s fmt=%s actual=%sB virtual=%sB stat=%sB billed_src=%sMB",
+                        src_path, fmt, act, virt, statb, src_mb)
+        except Exception:
+            logger.info("[snapshot] source=%s billed_src=%sMB (qemu-img info unavailable)", src_path, src_mb)
+
+        # Quota check against source size
+        new_total = used_mb + src_mb
+        if new_total > cap_mb:
+            deficit = new_total - cap_mb
             raise HTTPException(
                 status_code=413,
                 detail=(f"Not enough snapshot storage (need +{deficit} MB). "
-                        f"Current={before_total_mb} MB, New={new_size_mb} MB, Cap={cap_mb} MB.")
+                        f"Used={used_mb} MB, Src={src_mb} MB, Cap={cap_mb} MB.")
             )
 
-        # Success: persist the authoritative on-disk total
-        db_user.snapshot_stored = after_total_mb
+        # Create snapshot file (your manager handles the live backup)
+        snap_name = f"{user.id}__{os_type}__{vmid}"
+        out_path: Path = mgr.create_disk_snapshot(snap_name)
+
+        # Persist accounting by the billed source size
+        db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info("[snapshot] ok user=%s vmid=%s file=%s size=%sMB total=%s/%sMB",
-                    user.id, vmid, new_path.name, new_size_mb, after_total_mb, cap_mb)
+        logger.info("[snapshot] ok user=%s vmid=%s billed_src=%s size=%sMB total=%s/%sMB out=%s",
+                    user.id, vmid, src_path, src_mb, new_total, cap_mb, out_path)
 
         return {
             "status": "ok",
-            "snapshot": new_path.name,
-            "path": str(new_path),
-            "size_mb": new_size_mb,
-            "total_mb": after_total_mb,
+            "snapshot": out_path.name,
+            "path": str(out_path),
+            "billed_mb": src_mb,
+            "total_mb": new_total,
             "cap_mb": cap_mb,
         }
 
@@ -320,7 +397,6 @@ async def create_snapshot(
     except Exception as e:
         logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
-
 
 @router.post("/run_snaphot")
 async def run_snapshot(
