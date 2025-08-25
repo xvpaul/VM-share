@@ -1,5 +1,5 @@
 # /app/routers/vm.py
-import secrets, logging, subprocess
+import secrets, logging, subprocess, json
 from datetime import datetime, timezone
 from pathlib import Path
 from pydantic import BaseModel
@@ -177,10 +177,8 @@ def _bytes_to_mb(n: int) -> int:
 
 def _img_actual_mb(img: Path) -> int:
     try:
-        p = subprocess.run(
-            ["qemu-img", "info", "--output=json", str(img)],
-            capture_output=True, text=True
-        )
+        p = subprocess.run(["qemu-img", "info", "--output=json", str(img)],
+                           capture_output=True, text=True)
         if p.returncode == 0 and p.stdout:
             info = json.loads(p.stdout)
             n = int(info.get("actual-size") or info.get("virtual-size") or img.stat().st_size)
@@ -188,8 +186,7 @@ def _img_actual_mb(img: Path) -> int:
             n = img.stat().st_size
     except Exception:
         n = img.stat().st_size
-    # ceil bytes -> MiB
-    return (int(n) + (1024*1024 - 1)) // (1024*1024)
+    return (n + (1024*1024 - 1)) // (1024*1024)  # ceil bytes→MiB
 
 @router.post("/snapshot")
 async def create_snapshot(
@@ -206,42 +203,28 @@ async def create_snapshot(
 
         # vmid from client, else from store
         vmid = (request.vmid or "").strip()
+        sess = store.get_running_by_user(user.id) or {}
         if not vmid:
-            sess = store.get_running_by_user(user.id) or {}
             vmid = sess.get("vmid")
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
-        mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
+        # size source = the image the VM is currently using (we stored it as 'overlay')
+        src_path_str = (sess.get("overlay") or "").strip()
+        if not src_path_str:
+            raise HTTPException(status_code=409, detail="No active disk path in session")
+        src = Path(src_path_str)
+        if not src.exists():
+            raise HTTPException(status_code=409, detail=f"Active disk not found: {src}")
 
-        # VM must be running (create_disk_snapshot uses QMP; give a clearer error up front)
-        _, qmp_sock = mgr._socket_paths(vmid)
-        if not qmp_sock.exists():
-            raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
-
-        # Load quota (MB)
+        # quota
         db_user = db.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
         cap_mb  = int(db_user.snapshot_storage_capacity or 0)
         used_mb = int(db_user.snapshot_stored or 0)
 
-        # --- SIMPLE SOURCE PICKER: snapshot file if present, else overlay ---
-        # {SNAPSHOTS_PATH}/{user_id}__{os_type}__{vmid}.qcow2
-        src = Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2"
-        if not src.exists():
-            # fall back to the overlay path for this vmid/os
-            try:
-                src = mgr.overlay_path()
-            except Exception:
-                src = Path("")  # force not exists
-        if not src.exists():
-            raise HTTPException(status_code=409, detail="No source disk image found (overlay/snapshot)")
-
-        # Bill by the source image *actual* size
         src_mb = _img_actual_mb(src)
-
-        # Enforce quota BEFORE writing new file
         new_total = used_mb + src_mb
         if new_total > cap_mb:
             deficit = new_total - cap_mb
@@ -251,17 +234,22 @@ async def create_snapshot(
                        f"Used={used_mb} MB, WouldBe={new_total} MB, Cap={cap_mb} MB."
             )
 
-        # Create live snapshot to {SNAPSHOTS_PATH}/{user}__{os}__{vmid}.qcow2
+        # VM must be running; create live snapshot
+        mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
+        _, qmp_sock = mgr._socket_paths(vmid)
+        if not qmp_sock.exists():
+            raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
+
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
 
-        # Update usage by the source size we charged
+        # update usage by the source size
         db_user.snapshot_stored = new_total
         db.commit()
 
         logger.info(
-            "[snapshot] ok user=%s vmid=%s billed_src=%s size_mb=%s file=%s total=%s/%s",
-            user.id, vmid, str(src), src_mb, str(out_path), new_total, cap_mb
+            "[snapshot] ok user=%s vmid=%s billed=%sMB src=%s file=%s total=%s/%s",
+            user.id, vmid, src_mb, str(src), str(out_path), new_total, cap_mb
         )
         return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": src_mb}
 
@@ -279,7 +267,6 @@ async def create_snapshot(
 async def run_snapshot(
     request: RunScriptRequest,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
 ):
