@@ -31,6 +31,11 @@ class SnapshotRequest(BaseModel):
     os_type: str
     vmid: str | None = None  # allow FE to pass vmid; fallback to store if omitted
 
+class RemoveSnapshotRequest(BaseModel):
+    snapshot: str | None = None
+    os_type: str | None = None   # optional fallbacks
+    vmid: str | None = None
+
 @router.post("/run-script")
 async def run_vm_script(
     request: RunScriptRequest,
@@ -343,7 +348,7 @@ async def get_user_snapshots(user: User = Depends(get_current_user)):
     
 @router.post("/remove_snapshot")
 async def remove_snapshot(
-    request: SnapshotRequest,
+    request: RemoveSnapshotRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
