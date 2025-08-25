@@ -67,7 +67,7 @@ VM_PROFILES = {
         # e.g. Path("/root/myapp/custom/{uid}.iso")
     },
 }
-SNAPSHOTS_PATH = Path("/root/myapp/snapshots")
+SNAPSHOTS_PATH = Path("/root/myapp/snapshots/")
 
 # ---------- Redis ----------
 REDIS_URL = env("REDIS_URL", "redis://127.0.0.1:6379/0")
