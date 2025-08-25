@@ -174,66 +174,36 @@ async def run_custom_iso(
 def _bytes_to_mb(n: int) -> int:
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
 
-def _qmp_send(sock_path: Path, payload: dict, timeout: float = 10.0) -> dict:
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.settimeout(timeout)
-        s.connect(str(sock_path))
-        try:
-            _ = json.loads(s.recv(4096).decode(errors="ignore") or "{}")  # greeting
-        except Exception:
-            pass
-        s.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\n").encode())
-        try:
-            _ = json.loads(s.recv(4096).decode(errors="ignore") or "{}")
-        except Exception:
-            pass
-        s.sendall((json.dumps(payload) + "\n").encode())
-        resp = s.recv(65536).decode(errors="ignore") or "{}"
-        try:
-            return json.loads(resp)
-        except Exception:
-            return {}
-
-def _active_image_path_from_qmp(qmp_sock: Path) -> str | None:
-    qb = _qmp_send(qmp_sock, {"execute": "query-block"})
-    devices = qb.get("return", []) if isinstance(qb, dict) else []
-    def _fname(d: dict) -> str:
-        ins = d.get("inserted") or {}
-        if isinstance(ins.get("image"), dict):
-            fn = ins["image"].get("filename")
-            if fn: return fn
-        return ins.get("file") or ins.get("filename") or ""
-    # prefer writable qcow2/raw devices
-    for d in devices:
-        ins = d.get("inserted") or {}
-        if ins.get("ro") or ins.get("removable"):  # skip cdroms/ro
-            continue
-        fn = _fname(d)
-        if fn:
-            return fn
-    # fallback: any device with a filename
-    for d in devices:
-        fn = _fname(d)
-        if fn:
-            return fn
-    return None
-
-def _qcow_actual_bytes(img_path: str) -> int:
+def _qcow_actual_bytes(path: Path) -> int:
+    qemu_actual = 0
+    qemu_virtual = 0
     try:
         p = subprocess.run(
-            ["qemu-img", "info", "--output=json", img_path],
+            ["qemu-img", "info", "--output=json", str(path)],
             capture_output=True, text=True
         )
-        if p.returncode == 0:
+        if p.returncode == 0 and p.stdout:
             info = json.loads(p.stdout)
-            # Prefer actual-size; fallback to virtual-size; finally to stat size
-            return int(info.get("actual-size") or info.get("virtual-size") or Path(img_path).stat().st_size)
+            qemu_actual = int(info.get("actual-size") or 0)
+            qemu_virtual = int(info.get("virtual-size") or 0)
     except Exception:
         pass
+
+    fs_blocks = 0
+    fs_size   = 0
     try:
-        return Path(img_path).stat().st_size
+        st = os.stat(path)
+        fs_blocks = int(getattr(st, "st_blocks", 0)) * 512  # allocated bytes on disk
+        fs_size   = int(st.st_size)                         # logical size (sparse includes holes)
     except Exception:
-        return 0
+        pass
+
+    actual = qemu_actual or fs_blocks or fs_size
+    logger.info(
+        "[snapshot] size metrics file=%s actual=%d qemu_actual=%d qemu_virtual=%d fs_blocks=%d fs_size=%d",
+        str(path), actual, qemu_actual, qemu_virtual, fs_blocks, fs_size
+    )
+    return actual
 
 @router.post("/snapshot")
 async def create_snapshot(
@@ -266,37 +236,41 @@ async def create_snapshot(
             raise HTTPException(status_code=404, detail="User not found")
         cap_mb  = int(db_user.snapshot_storage_capacity or 0)
         used_mb = int(db_user.snapshot_stored or 0)
+        logger.info("[snapshot] quota user=%s used=%dMB cap=%dMB", user.id, used_mb, cap_mb)
 
-        # === NEW: estimate size from the *source* disk attached to the VM ===
-        src_img = _active_image_path_from_qmp(qmp_sock)
-        if not src_img:
-            raise HTTPException(status_code=500, detail="Cannot determine active disk image")
-        src_bytes = _qcow_actual_bytes(src_img)
-        src_mb    = _bytes_to_mb(src_bytes)
-
-        # Enforce quota BEFORE creating the snapshot file
-        new_total = used_mb + src_mb
-        if new_total > cap_mb:
-            deficit = new_total - cap_mb
-            raise HTTPException(
-                status_code=413,
-                detail=f"Not enough snapshot storage (need +{deficit} MB). "
-                       f"Used={used_mb} MB, WouldBe={new_total} MB, Cap={cap_mb} MB."
-            )
-
-        # Create snapshot (live backup to qcow2)
+        # Create live snapshot file
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
+        logger.info("[snapshot] created file=%s", str(out_path))
 
-        # Update usage by the *source* image size we charged for
+        # Measure real allocated size and enforce quota
+        snap_bytes = _qcow_actual_bytes(out_path)
+        snap_mb    = _bytes_to_mb(snap_bytes)
+        new_total  = used_mb + snap_mb
+        logger.info("[snapshot] charge size=%dB (%dMB) new_total=%dMB cap=%dMB",
+                    snap_bytes, snap_mb, new_total, cap_mb)
+
+        if new_total > cap_mb:
+            try:
+                out_path.unlink(missing_ok=True)
+            finally:
+                deficit = new_total - cap_mb
+                logger.warning("[snapshot] over quota: need +%dMB (used=%d cap=%d new_total=%d)",
+                               deficit, used_mb, cap_mb, new_total)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Not enough snapshot storage (need +{deficit} MB). "
+                           f"Used={used_mb} MB, NewTotal={new_total} MB, Cap={cap_mb} MB."
+                )
+
+        # Within quota: persist usage
         db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info(
-            "[snapshot] ok user=%s vmid=%s src=%s src_mb=%s file=%s total=%s/%s",
-            user.id, vmid, src_img, src_mb, str(out_path), new_total, cap_mb
-        )
-        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": src_mb}
+        logger.info("[snapshot] ok user=%s vmid=%s file=%s billed=%dMB total=%d/%dMB",
+                    user.id, vmid, out_path.name, snap_mb, new_total, cap_mb)
+
+        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": snap_mb}
 
     except HTTPException:
         raise
