@@ -299,3 +299,10 @@ async def get_user_snapshots(user: User = Depends(get_current_user)):
     except Exception:
         logger.exception("[snapshots] list failed user=%s", user.id)
         return []
+    
+@router.post("/remove_snapshot")
+async def create_snapshot(
+    request: SnapshotRequest,
+    user: User = Depends(get_current_user),
+    store: SessionStore = Depends(get_session_store),
+): ...
