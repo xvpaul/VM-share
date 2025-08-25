@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Dict, List, Tuple
 import time
 import redis
-from configs.redis_config import get_redis
+from configs.config import get_redis
 
 def now_ms() -> int:
     return int(time.time() * 1000)

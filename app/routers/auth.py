@@ -1,7 +1,6 @@
 # /app/routers/auth.py
 import logging
 import os
-import configs.log_config as logs
 from fastapi import APIRouter, Request, Depends, HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse

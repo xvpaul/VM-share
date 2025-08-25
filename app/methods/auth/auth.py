@@ -1,7 +1,7 @@
 # /app/methods/auth/auth.py
 import logging
 import os
-import configs.log_config as logs
+from configs.config import log as logs
 from sqlalchemy.orm import Session 
 from fastapi import Request, HTTPException
 from passlib.context import CryptContext

@@ -6,7 +6,7 @@ from threading import Thread
 import os
 from pathlib import Path
 from typing import Optional
-import configs.vm_profiles as vm_profiles
+import configs.config as VM_PROFILES
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +58,8 @@ def cleanup_vm(vmid: str, store) -> None:
             if overlay_path:
                 files_to_remove.append(Path(overlay_path))
             else:
-                if os_type and os_type in vm_profiles.VM_PROFILES:
-                    profile = vm_profiles.VM_PROFILES[os_type]
+                if os_type and os_type in VM_PROFILES:
+                    profile = VM_PROFILES[os_type]
                     files_to_remove.append(
                         profile["overlay_dir"] / f"{profile['overlay_prefix']}_{vmid}.qcow2"
                     )

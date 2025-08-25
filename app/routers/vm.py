@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from configs import server_config, vm_profiles, config
+from configs.config import server, VM_PROFILES, SNAPSHOTS_PATH
 from methods.manager.OverlayManager import QemuOverlayManager, OnlineSnapshotError
 from methods.database.database import get_db
 from methods.auth.auth import get_current_user
@@ -17,7 +17,6 @@ from methods.manager.SessionManager import get_session_store, SessionStore
 from methods.manager import get_websockify_service
 from methods.manager.WebsockifyService import WebsockifyService
 
-import configs.log_config as logs
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ async def run_vm_script(
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
             })
 
         logger.info(f"[run_vm_script] Launch requested by {user.login} (id={user_id}); vmid={vmid}")
@@ -84,7 +83,7 @@ async def run_vm_script(
         response = {
             "message": f"VM for user {user.login} launched (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={http_port}",
+            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
         }
         return JSONResponse(response)
 
@@ -108,12 +107,12 @@ async def run_custom_iso(
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html"
-                            f"?host={server_config.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html"
+                            f"?host={server.SERVER_HOST}&port={existing['http_port']}"
             })
 
         # ---- FIXED: build ISO path correctly ----
-        prof = vm_profiles.VM_PROFILES["custom"]
+        prof = VM_PROFILES["custom"]
         base = Path(prof["base_image"])            # may be dir, file, or template with {uid}
         prefix = str(prof.get("prefix", "{uid}.iso"))
 
@@ -156,8 +155,8 @@ async def run_custom_iso(
         return JSONResponse({
             "message": f"Custom ISO VM for {user.login} launched (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html"
-                        f"?host={server_config.SERVER_HOST}&port={http_port}",
+            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html"
+                        f"?host={server.SERVER_HOST}&port={http_port}",
         })
 
     except FileNotFoundError as e:
@@ -228,7 +227,7 @@ async def run_snapshot(
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
             })
 
         vmid = secrets.token_hex(6)
@@ -237,7 +236,7 @@ async def run_snapshot(
         # Resolve snapshot path (accept absolute or basename)
         snap_path = Path(snap_name)
         if not snap_path.is_absolute():
-            snap_path = Path(config.SNAPSHOTS_PATH) / snap_path.name
+            snap_path = Path(SNAPSHOTS_PATH) / snap_path.name
         if not snap_path.exists():
             raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
 
@@ -263,7 +262,7 @@ async def run_snapshot(
         return JSONResponse({
             "message": f"VM for user {user.login} launched from snapshot (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server_config.SERVER_HOST}:8000/novnc/vnc.html?host={server_config.SERVER_HOST}&port={http_port}",
+            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
         })
 
     except HTTPException:
@@ -276,7 +275,7 @@ async def run_snapshot(
 async def get_user_snapshots(user: User = Depends(get_current_user)):
     try:
         items = []
-        for p in config.SNAPSHOTS_PATH.glob(f"{user.id}__*"):
+        for p in SNAPSHOTS_PATH.glob(f"{user.id}__*"):
             if not p.is_file():
                 continue
             stat = p.stat()

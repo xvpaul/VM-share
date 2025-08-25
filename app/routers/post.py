@@ -1,6 +1,5 @@
 # /app/routers/post.py
 import logging
-import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File

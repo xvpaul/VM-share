@@ -1,8 +1,6 @@
 # /app/methods/manager/OverlayManager.py
 import platform, shutil, subprocess, os, tempfile, time, json, re, socket
-import configs.vm_profiles as vm_profiles
-import configs.log_config as logs
-from configs.config import SNAPSHOTS_PATH
+from configs.config import SNAPSHOTS_PATH, VM_PROFILES
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
@@ -21,10 +19,10 @@ class QemuOverlayManager:
     supporting multiple OS profiles (e.g., alpine, ubuntu).
     """
     def __init__(self, user_id: str, vmid: str, os_type: str = "alpine"):
-        if os_type not in vm_profiles.VM_PROFILES:
+        if os_type not in VM_PROFILES:
             raise ValueError(f"Unsupported OS type: {os_type}")
         
-        self.profile = vm_profiles.VM_PROFILES[os_type]
+        self.profile = VM_PROFILES[os_type]
         self.user_id = user_id
         self.vmid = vmid
         self.os_type = os_type
