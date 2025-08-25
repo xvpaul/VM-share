@@ -48,12 +48,6 @@ VM_PROFILES = {
         "base_image": Path("/root/myapp/base_images/Tiny/tinycore-base.qcow2"),
         "default_memory": 1024,
     },
-    "lubuntu": {
-        "overlay_dir": Path("/root/myapp/overlays/lubuntu"),
-        "overlay_prefix": "lubuntu",
-        "base_image": Path("/root/myapp/base_images/Lubuntu/lubuntu-base.qcow2"),
-        "default_memory": 2048,
-    },
     "ubuntu": {
         "overlay_dir": Path("/root/myapp/overlays/Ubuntu"),
         "overlay_prefix": "ubuntu",
@@ -66,6 +60,12 @@ VM_PROFILES = {
         "default_memory": 2048
         # e.g. Path("/root/myapp/custom/{uid}.iso")
     },
+    # "lubuntu": {
+    #     "overlay_dir": Path("/root/myapp/overlays/lubuntu"),
+    #     "overlay_prefix": "lubuntu",
+    #     "base_image": Path("/root/myapp/base_images/Lubuntu/lubuntu-base.qcow2"),
+    #     "default_memory": 2048,
+    # },
 }
 SNAPSHOTS_PATH = Path("/root/myapp/snapshots/")
 

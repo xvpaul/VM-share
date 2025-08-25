@@ -174,20 +174,23 @@ async def run_custom_iso(
 def _bytes_to_mb(n: int) -> int:
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
 
-def _file_usage_bytes(path: Path) -> int:
-    """Actual disk usage; prefer st_blocks*512, fallback to st_size."""
+def _alloc_bytes(p: Path) -> int:
+    """Actual disk usage: st_blocks*512 if available, else st_size. Returns 0 if file missing."""
     try:
-        st = os.stat(path, follow_symlinks=False)
+        st = os.stat(p, follow_symlinks=False)
         blocks = getattr(st, "st_blocks", 0)
         if blocks:
             used = int(blocks) * 512
-            logger.info("[snapshot] usage file=%s st_blocks=%d used_bytes=%d", path, blocks, used)
+            logger.info("[quota] file=%s blocks=%d used=%dB", p, blocks, used)
             return used
         used = int(st.st_size)
-        logger.info("[snapshot] usage(fallback) file=%s st_size=%d", path, used)
+        logger.info("[quota] file=%s st_size=%dB (fallback)", p, used)
         return used
+    except FileNotFoundError:
+        logger.info("[quota] file missing: %s", p)
+        return 0
     except Exception as e:
-        logger.warning("[snapshot] usage failed for %s: %s", path, e)
+        logger.warning("[quota] stat failed for %s: %s", p, e)
         return 0
 
 @router.post("/snapshot")
@@ -211,11 +214,8 @@ async def create_snapshot(
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
-        # VM must be running (QMP present)
+        # Manager (for paths)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
-        _, qmp_sock = mgr._socket_paths(vmid)
-        if not qmp_sock.exists():
-            raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
         # Quota
         db_user = db.get(User, user.id)
@@ -225,40 +225,38 @@ async def create_snapshot(
         used_mb = int(db_user.snapshot_stored or 0)
         logger.info("[snapshot] quota user=%s used=%dMB cap=%dMB", user.id, used_mb, cap_mb)
 
-        # Determine what to charge: existing snapshot OR overlay
-        snap_basename = f"{user.id}__{os_type}__{vmid}.qcow2"
-        snap_path = Path(SNAPSHOTS_PATH) / snap_basename
+        # Determine what to charge:
+        #   If overlay exists -> charge (base_image + overlay).
+        #   Else -> charge existing snapshot file for this VM.
+        base_path    = Path(mgr.profile["base_image"])
+        overlay_path = Path(mgr.overlay_path())
+        snap_path    = Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2"
 
-        charge_src = None
-        charge_bytes = 0
-
-        if snap_path.exists():
-            charge_src = "existing_snapshot"
-            charge_bytes = _file_usage_bytes(snap_path)
-            logger.info("[snapshot] charging from existing snapshot: %s (%d bytes)", snap_path, charge_bytes)
+        if overlay_path.exists():
+            base_bytes = _alloc_bytes(base_path) if base_path.exists() else 0
+            ovl_bytes  = _alloc_bytes(overlay_path)
+            charge_src   = "base+overlay"
+            charge_bytes = base_bytes + ovl_bytes
+            logger.info("[snapshot] charge source=%s base=%s(%dB) overlay=%s(%dB) total=%dB",
+                        charge_src, base_path, base_bytes, overlay_path, ovl_bytes, charge_bytes)
         else:
-            try:
-                overlay = mgr.overlay_path()
-            except Exception:
-                overlay = None
-            if overlay and Path(overlay).exists():
-                charge_src = "overlay"
-                charge_bytes = _file_usage_bytes(Path(overlay))
-                logger.info("[snapshot] charging from overlay: %s (%d bytes)", overlay, charge_bytes)
-            else:
-                # No existing snapshot and no overlay available — cannot determine charge base
-                logger.error("[snapshot] no charge source (no existing snapshot, no overlay)")
-                raise HTTPException(status_code=409, detail="No snapshot/overlay to base size on")
+            if not snap_path.exists():
+                logger.error("[snapshot] no overlay and no existing snapshot: %s", snap_path)
+                raise HTTPException(status_code=409, detail="No overlay or existing snapshot to base size on")
+            charge_src   = "existing_snapshot"
+            charge_bytes = _alloc_bytes(snap_path)
+            logger.info("[snapshot] charge source=%s snapshot=%s(%dB)",
+                        charge_src, snap_path, charge_bytes)
 
         charge_mb = _bytes_to_mb(charge_bytes)
         new_total = used_mb + charge_mb
-        logger.info("[snapshot] pre-check: source=%s charge=%dMB new_total=%dMB cap=%dMB",
-                    charge_src, charge_mb, new_total, cap_mb)
+        logger.info("[snapshot] precheck source=%s charge=%dMB used=%dMB cap=%dMB new_total=%dMB",
+                    charge_src, charge_mb, used_mb, cap_mb, new_total)
 
-        # Enforce quota BEFORE creating anything
+        # Enforce quota BEFORE creating the snapshot
         if new_total > cap_mb:
             deficit = new_total - cap_mb
-            logger.warning("[snapshot] over quota: need +%dMB (used=%d cap=%d planned_total=%d)",
+            logger.warning("[snapshot] over quota: need +%dMB (used=%d cap=%d planned=%d)",
                            deficit, used_mb, cap_mb, new_total)
             raise HTTPException(
                 status_code=413,
@@ -266,17 +264,18 @@ async def create_snapshot(
                        f"Used={used_mb} MB, NewTotal={new_total} MB, Cap={cap_mb} MB."
             )
 
-        # Create/refresh snapshot file (live backup)
+        # Create snapshot (your QMP-based or offline implementation)
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
-        logger.info("[snapshot] created file=%s (source=%s charged=%dMB)", str(out_path), charge_src, charge_mb)
+        logger.info("[snapshot] created file=%s billed_source=%s billed=%dMB",
+                    str(out_path), charge_src, charge_mb)
 
-        # Persist usage by the chosen source size
+        # Persist usage
         db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info("[snapshot] ok user=%s vmid=%s billed=%dMB total=%d/%dMB file=%s",
-                    user.id, vmid, charge_mb, new_total, cap_mb, out_path.name)
+        logger.info("[snapshot] OK user=%s vmid=%s total=%d/%dMB",
+                    user.id, vmid, new_total, cap_mb)
 
         return {
             "status": "ok",
@@ -284,6 +283,8 @@ async def create_snapshot(
             "path": str(out_path),
             "size_mb": charge_mb,
             "charged_from": charge_src,
+            "total_mb": new_total,
+            "cap_mb": cap_mb,
         }
 
     except HTTPException:
