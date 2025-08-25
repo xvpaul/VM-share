@@ -203,13 +203,9 @@ async def create_snapshot(
             raise HTTPException(status_code=400, detail="Missing os_type")
 
         # vmid from client, else from store
-        vmid = (request.vmid or "").strip()
-        if not vmid:
-            sess = store.get_running_by_user(user.id) or {}
-            vmid = sess.get("vmid")
-
+        sess = store.get_running_by_user(user.id) or {}
+        vmid = (request.vmid or "").strip() or (sess.get("vmid") or "")
         logger.info("[snapshot] request user=%s os_type=%s vmid=%s", user.id, os_type, vmid)
-
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
@@ -221,39 +217,74 @@ async def create_snapshot(
         if not qmp_sock.exists():
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        # Determine **source** image path by convention:
-        # 1) snapshot file if present, else 2) overlay path
-        snap_file = Path(SNAPSHOTS_PATH) / f"{user.id}__{os_type}__{vmid}.qcow2"
-        logger.info("[snapshot] candidate snapshot=%s exists=%s", snap_file, snap_file.exists())
+        # -------- Source selection with full logging --------
+        from pathlib import Path
+        snap_dir = Path(SNAPSHOTS_PATH)
+        try:
+            logger.info("[snapshot] SNAPSHOTS_PATH=%s exists=%s is_dir=%s",
+                        snap_dir, snap_dir.exists(), snap_dir.is_dir())
+        except Exception as e:
+            logger.warning("[snapshot] SNAPSHOTS_PATH inspect failed: %s", e)
 
-        if snap_file.exists():
-            src = snap_file
-            chosen = "snapshot"
-        else:
+        # Candidate 1 (best): what the VM is actually using right now (set by boot_vm)
+        sess_overlay = sess.get("overlay") or ""
+        cand_session = Path(sess_overlay) if sess_overlay else None
+
+        # Candidate 2: expected snapshot name for this vmid
+        cand_snapshot = snap_dir / f"{user.id}__{os_type}__{vmid}.qcow2"
+
+        # Candidate 3: overlay path by convention (prefix == os_type)
+        try:
+            cand_overlay = mgr.overlay_path()
+        except Exception as e:
+            logger.warning("[snapshot] overlay_path() failed: %s", e)
+            cand_overlay = None
+
+        candidates = [
+            ("session", cand_session),
+            ("snapshot", cand_snapshot),
+            ("overlay", cand_overlay),
+        ]
+
+        chosen = None
+        src = None
+        for label, path in candidates:
+            if not path:
+                logger.info("[snapshot] candidate %s: (none)", label)
+                continue
             try:
-                src = mgr.overlay_path()
+                exists = path.exists()
             except Exception as e:
-                logger.warning("[snapshot] overlay_path() failed: %s", e)
-                src = Path("")  # force not exists
-            logger.info("[snapshot] candidate overlay=%s exists=%s", src, src.exists())
-            chosen = "overlay"
-            if not src.exists():
-                raise HTTPException(status_code=409, detail="No source disk image found (overlay/snapshot)")
+                logger.info("[snapshot] candidate %s: %s exists=error(%s)", label, path, e)
+                continue
+            logger.info("[snapshot] candidate %s: %s exists=%s", label, path, exists)
+            if exists and path.is_file():
+                chosen, src = label, path
+                break
 
-        # Quota
+        if not src:
+            raise HTTPException(
+                status_code=409,
+                detail=("No source disk image found; tried:\n"
+                        f" - session:  {cand_session}\n"
+                        f" - snapshot: {cand_snapshot}\n"
+                        f" - overlay:  {cand_overlay}")
+            )
+
+        logger.info("[snapshot] using %s as billing source: %s", chosen, src)
+
+        # -------- Quota / size accounting --------
         db_user = db.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
         cap_mb  = int(db_user.snapshot_storage_capacity or 0)
         used_mb = int(db_user.snapshot_stored or 0)
 
-        # Probe detailed size info for the logs (non-fatal if it fails)
+        # Rich size probe for logs
         qimg_fmt = qimg_actual = qimg_virtual = None
         try:
-            p = subprocess.run(
-                ["qemu-img", "info", "--output=json", str(src)],
-                capture_output=True, text=True
-            )
+            p = subprocess.run(["qemu-img", "info", "--output=json", str(src)],
+                               capture_output=True, text=True)
             if p.returncode == 0 and p.stdout:
                 j = json.loads(p.stdout)
                 qimg_fmt     = j.get("format")
@@ -263,58 +294,50 @@ async def create_snapshot(
             logger.warning("[snapshot] qemu-img info failed for %s: %s", src, e)
 
         try:
-            stat_size = src.stat().st_size
+            stat_bytes = src.stat().st_size
         except Exception:
-            stat_size = None
+            stat_bytes = None
 
-        bill_mb = _img_actual_mb(src)   # bill by actual size of the source qcow/raw
+        bill_mb = _img_actual_mb(src)   # your helper: bill by actual on-disk MiB (ceil)
         new_total = used_mb + bill_mb
 
         logger.info(
-            "[snapshot] billing chosen=%s src=%s fmt=%s actual=%sB virtual=%sB file=%sB bill=%sMB used=%sMB cap=%sMB new_total=%sMB",
-            chosen,
-            src,
-            (qimg_fmt or "?"),
+            "[snapshot] size probe src=%s fmt=%s actual=%sB virtual=%sB stat=%sB billed=%sMB used=%sMB cap=%sMB new_total=%sMB",
+            src, (qimg_fmt or "?"),
             (qimg_actual if qimg_actual is not None else "n/a"),
             (qimg_virtual if qimg_virtual is not None else "n/a"),
-            (stat_size if stat_size is not None else "n/a"),
+            (stat_bytes if stat_bytes is not None else "n/a"),
             bill_mb, used_mb, cap_mb, new_total
         )
 
         if new_total > cap_mb:
             deficit = new_total - cap_mb
-            logger.warning(
-                "[snapshot] quota exceeded user=%s need+%sMB used=%sMB cap=%sMB billed=%sMB src=%s",
-                user.id, deficit, used_mb, cap_mb, bill_mb, src
-            )
+            logger.warning("[snapshot] quota exceeded user=%s need+%sMB used=%sMB cap=%sMB billed=%sMB src=%s",
+                           user.id, deficit, used_mb, cap_mb, bill_mb, src)
             raise HTTPException(
                 status_code=413,
                 detail=f"Not enough snapshot storage (need +{deficit} MB). "
                        f"Used={used_mb} MB, WouldBe={new_total} MB, Cap={cap_mb} MB."
             )
 
-        # Create live snapshot (drive-backup) -> writes to SNAPSHOTS_PATH/{user}__{os}__{vmid}.qcow2
+        # -------- Create the snapshot (QMP drive-backup) --------
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
 
-        # Log the produced file size on disk
         try:
             out_bytes = out_path.stat().st_size
         except Exception:
             out_bytes = None
-        logger.info(
-            "[snapshot] created file=%s size_bytes=%s (billed=%sMB)",
-            out_path, (out_bytes if out_bytes is not None else "n/a"), bill_mb
-        )
+        logger.info("[snapshot] created file=%s size_bytes=%s (billed=%sMB)",
+                    out_path, (out_bytes if out_bytes is not None else "n/a"), bill_mb)
 
-        # Persist usage (add billed size)
+        # Persist usage
         db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info(
-            "[snapshot] ok user=%s vmid=%s billed_src=%s billed_mb=%s total_mb=%s/%s out=%s",
-            user.id, vmid, src, bill_mb, new_total, cap_mb, out_path
-        )
+        logger.info("[snapshot] ok user=%s vmid=%s billed_src=%s billed_mb=%s total_mb=%s/%s out=%s",
+                    user.id, vmid, src, bill_mb, new_total, cap_mb, out_path)
+
         return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": bill_mb}
 
     except HTTPException:
