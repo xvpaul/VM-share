@@ -63,6 +63,7 @@ VM_PROFILES = {
     "custom": {
         "prefix": "{uid}.iso",
         "base_image": Path("/root/myapp/custom/"),
+        "default_memory": 2048
         # e.g. Path("/root/myapp/custom/{uid}.iso")
     },
 }
