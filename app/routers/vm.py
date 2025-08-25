@@ -1,5 +1,5 @@
 # /app/routers/vm.py
-import secrets, logging, subprocess, json, socket
+import secrets, logging, subprocess, json, socket, os
 from datetime import datetime, timezone
 from pathlib import Path
 from pydantic import BaseModel
