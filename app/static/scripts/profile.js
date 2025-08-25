@@ -11,6 +11,7 @@ const SNAPSHOTS_ENDPOINT = '/vm/get_user_snapshots';
 const RUN_VM_ENDPOINT = '/vm/run_snaphot'
 const AUTH_ME = '/auth/me';
 const AUTH_LOGOUT = '/auth/logout';
+const REMOVE_SNAPSHOT_ENDPOINT = '/vm/remove_snapshot';
 const logoutBtn = document.getElementById('logout-btn');
 
 logoutBtn?.addEventListener('click', async () => {
@@ -369,6 +370,46 @@ function extractOsTypeFromSnapshotId(id) {
   return (parts.length >= 3 && parts[1]) ? parts[1] : 'unknown';
 }
 
+async function deleteSnapshot(s, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+  try {
+    const snapshotId = s.name || s.id || s.path || s.file;
+    if (!snapshotId) throw new Error('No snapshot identifier');
+
+    const res = await fetch(REMOVE_SNAPSHOT_ENDPOINT, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot: snapshotId })
+    });
+
+    let ok = res.ok;
+    let msg = ok ? 'Snapshot removed' : `Remove failed (${res.status})`;
+
+    try {
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const data = await res.json();
+        if (ok && (data?.removed || data?.status === 'ok')) {
+          msg = `Removed ${data.snapshot || snapshotId}`;
+        } else if (!ok && data?.detail) {
+          msg = data.detail;
+        }
+      } else {
+        const txt = (await res.text()).trim();
+        if (txt) msg = txt;
+      }
+    } catch {}
+
+    uiToast(msg, ok ? 'ok' : 'err');
+    if (ok) fetchSnapshots(); // refresh table
+  } catch (e) {
+    uiToast(e.message || 'Delete failed', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+  }
+}
+
 async function runSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
@@ -432,7 +473,7 @@ function renderSnapshots(list) {
         <th class="text-left px-3 py-2">VM</th>
         <th class="text-left px-3 py-2">Size</th>
         <th class="text-left px-3 py-2">Created</th>
-        <th class="text-left px-3 py-2">Notes</th>
+        <th class="text-left px-3 py-2">Delete</th>
         <th class="text-left px-3 py-2">Run</th>
       </tr>
     </thead>
@@ -454,7 +495,6 @@ function renderSnapshots(list) {
     const name = s.name || s.id || '—';
     const vm   = s.vm || s.instance || s.vmid || '—';
 
-    // Size: prefer bytes->MB, else provided string
     let sizeStr = '—';
     if (typeof s.sizeBytes === 'number') {
       sizeStr = `${(s.sizeBytes / 1024 / 1024).toFixed(1)} MB`;
@@ -464,7 +504,6 @@ function renderSnapshots(list) {
       sizeStr = s.size;
     }
 
-    // Created: support createdAt or modified (ISO)
     const createdISO = s.createdAt || s.modified || '';
     const createdStr = createdISO ? new Date(createdISO).toLocaleString() : '—';
 
@@ -473,24 +512,36 @@ function renderSnapshots(list) {
       <td class="px-3 py-2">${vm}</td>
       <td class="px-3 py-2">${sizeStr}</td>
       <td class="px-3 py-2">${createdStr}</td>
-      <td class="px-3 py-2 text-neutral-300">${s.notes || '—'}</td>
-      <td class="px-3 py-2"></td>
+      <td class="px-3 py-2"></td>  <!-- Delete -->
+      <td class="px-3 py-2"></td>  <!-- Run -->
     `;
 
+    const cells = tr.querySelectorAll('td');
+    const delTd = cells[cells.length - 2];
+    const runTd = cells[cells.length - 1];
+
+    // Delete button
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'px-3 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => deleteSnapshot(s, delBtn));
+    delTd.appendChild(delBtn);
+
     // Run button
-    const runTd = tr.lastElementChild;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'px-3 py-1 rounded bg-white/10 hover:bg-white/20';
-    btn.textContent = 'Run';
-    btn.addEventListener('click', () => runSnapshot(s, btn));
-    runTd.appendChild(btn);
+    const runBtn = document.createElement('button');
+    runBtn.type = 'button';
+    runBtn.className = 'px-3 py-1 rounded bg-white/10 hover:bg-white/20';
+    runBtn.textContent = 'Run';
+    runBtn.addEventListener('click', () => runSnapshot(s, runBtn));
+    runTd.appendChild(runBtn);
 
     tbody.appendChild(tr);
   });
 
   return table;
 }
+
 
 async function fetchSnapshots() {
   if (!snapshotsStatus || !snapshotsResults) return;

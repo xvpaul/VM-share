@@ -166,11 +166,16 @@ async def run_custom_iso(
         logger.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+def _bytes_to_mb(n: int) -> int:
+    # ceil(n / (1024*1024)) without floats
+    return (int(n) + (1024*1024 - 1)) // (1024*1024)
+
 @router.post("/snapshot")
 async def create_snapshot(
     request: SnapshotRequest,
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
+    db: Session = Depends(get_db),
 ):
     vmid = None
     try:
@@ -178,7 +183,7 @@ async def create_snapshot(
         if not os_type:
             raise HTTPException(status_code=400, detail="Missing os_type")
 
-        # Prefer vmid from client (page knows which VM it's on)
+        # vmid from client, else from store
         vmid = (request.vmid or "").strip()
         if not vmid:
             sess = store.get_running_by_user(user.id) or {}
@@ -186,25 +191,62 @@ async def create_snapshot(
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
-        # Require VM to be running (QMP socket must exist)
-        # (We instantiate a manager just to compute the socket paths)
+        # VM must be running (QMP present)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
         _, qmp_sock = mgr._socket_paths(vmid)
         if not qmp_sock.exists():
-            # VM not running; we don't attempt offline copy because overlays may be purged
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        snap_name = f"{user.id}__{os_type}__{vmid}"
-        out_path = mgr.create_disk_snapshot(snap_name)
+        # Fetch user quota (MB)
+        db_user = db.get(User, user.id)
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-        logger.info("[snapshot] ok user=%s vmid=%s out=%s", user.id, vmid, out_path)
-        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path)}
+        cap_mb  = int(db_user.snapshot_storage_capacity or 0)
+        used_mb = int(db_user.snapshot_stored or 0)
+
+        # Create snapshot file (live backup). It writes to:
+        # {SNAPSHOTS_PATH}/{user_id}__{os_type}__{vmid}.qcow2
+        snap_name = f"{user.id}__{os_type}__{vmid}"
+        out_path: Path = mgr.create_disk_snapshot(snap_name)
+
+        # Measure new file and enforce quota
+        try:
+            size_mb = _bytes_to_mb(out_path.stat().st_size)
+        except Exception:
+            # If for some reason file isn't there, treat as error
+            raise HTTPException(status_code=500, detail="Snapshot file missing after creation")
+
+        new_total = used_mb + size_mb
+        if new_total > cap_mb:
+            # Over quota: remove the just-created file and reject
+            try:
+                out_path.unlink(missing_ok=True)
+            finally:
+                deficit = new_total - cap_mb
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Not enough snapshot storage (need +{deficit} MB). "
+                           f"Used={used_mb} MB, NewTotal={new_total} MB, Cap={cap_mb} MB."
+                )
+
+        db_user.snapshot_stored = new_total
+        db.commit()
+
+        logger.info(
+            "[snapshot] ok user=%s vmid=%s file=%s size_mb=%s total_mb=%s/%s",
+            user.id, vmid, str(out_path), size_mb, new_total, cap_mb
+        )
+        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": size_mb}
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception("[snapshot] failed user=%s vmid=%s", user.id, vmid)
+    except OnlineSnapshotError as e:
+        logger.error("[snapshot] failed user=%s vmid=%s error=%s", user.id, vmid, e)
         raise HTTPException(status_code=500, detail=f"Snapshot error: {e}")
+    except Exception as e:
+        logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 @router.post("/run_snaphot")
 async def run_snapshot(
@@ -292,7 +334,6 @@ async def get_user_snapshots(user: User = Depends(get_current_user)):
                 "path": str(p),
             })
 
-        # newest first
         items.sort(key=lambda x: x["modified"], reverse=True)
         logger.info("[snapshots] user=%s count=%d", user.id, len(items))
         return items
@@ -301,8 +342,54 @@ async def get_user_snapshots(user: User = Depends(get_current_user)):
         return []
     
 @router.post("/remove_snapshot")
-async def create_snapshot(
+async def remove_snapshot(
     request: SnapshotRequest,
     user: User = Depends(get_current_user),
-    store: SessionStore = Depends(get_session_store),
-): ...
+    db: Session = Depends(get_db),
+):
+    try:
+        # Determine filename: prefer explicit `snapshot`, else compose from os_type + vmid
+        snap_name = (getattr(request, "snapshot", None) or "").strip()
+        if not snap_name:
+            os_type = (getattr(request, "os_type", "") or "").strip()
+            vmid = (getattr(request, "vmid", "") or "").strip()
+            if not (os_type and vmid):
+                raise HTTPException(status_code=400, detail="Provide `snapshot` or both `os_type` and `vmid`")
+            snap_name = f"{user.id}__{os_type}__{vmid}.qcow2"
+
+        # Always resolve to basename inside snapshots dir (no path traversal)
+        snap_path = Path(SNAPSHOTS_PATH) / Path(snap_name).name
+
+        # Load user for quota update
+        db_user = db.get(User, user.id)
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        freed_mb = 0
+        if snap_path.exists():
+            try:
+                freed_mb = _bytes_to_mb(snap_path.stat().st_size)
+            except Exception:
+                freed_mb = 0
+            try:
+                snap_path.unlink()
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to remove snapshot file: {e}")
+        else:
+            return {"status": "ok", "removed": False, "snapshot": snap_path.name, "freed_mb": 0, "total_mb": int(db_user.snapshot_stored or 0)}
+
+        current_mb = int(db_user.snapshot_stored or 0)
+        new_total = max(0, current_mb - freed_mb)
+        db_user.snapshot_stored = new_total
+        db.commit()
+
+        logger.info("[snapshot] removed user=%s file=%s freed=%sMB total=%sMB",
+                    user.id, snap_path.name, freed_mb, new_total)
+
+        return {"status": "ok", "removed": True, "snapshot": snap_path.name, "freed_mb": freed_mb, "total_mb": new_total}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("[snapshot] remove failed user=%s", user.id)
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")

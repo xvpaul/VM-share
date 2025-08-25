@@ -2,7 +2,6 @@
 from pathlib import Path
 from types import SimpleNamespace
 from dotenv import load_dotenv, find_dotenv
-from dataclasses import dataclass  # optional; not used below but handy if you want later
 import os, logging, redis as _redis
 
 # --- Load .env (doesn't override real env vars) ---
@@ -23,6 +22,7 @@ def env(name, default=None, *, required=False, cast=str):
 
 # ---------- core app config ----------
 DATABASE_URL = env("DATABASE_URL", required=True)
+DATABASE_STORAGE_CAPACITY = env("DATABASE_STORAGE_CAPACITY", 300, cast=int)
 PORT         = env("PORT", 8000, cast=int)
 DEBUG        = env("DEBUG", False, cast=bool)
 SECRET_KEY   = env("SECRET_KEY", required=True)
