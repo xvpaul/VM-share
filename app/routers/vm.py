@@ -174,36 +174,21 @@ async def run_custom_iso(
 def _bytes_to_mb(n: int) -> int:
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
 
-def _qcow_actual_bytes(path: Path) -> int:
-    qemu_actual = 0
-    qemu_virtual = 0
+def _file_usage_bytes(path: Path) -> int:
+    """Actual disk usage; prefer st_blocks*512, fallback to st_size."""
     try:
-        p = subprocess.run(
-            ["qemu-img", "info", "--output=json", str(path)],
-            capture_output=True, text=True
-        )
-        if p.returncode == 0 and p.stdout:
-            info = json.loads(p.stdout)
-            qemu_actual = int(info.get("actual-size") or 0)
-            qemu_virtual = int(info.get("virtual-size") or 0)
-    except Exception:
-        pass
-
-    fs_blocks = 0
-    fs_size   = 0
-    try:
-        st = os.stat(path)
-        fs_blocks = int(getattr(st, "st_blocks", 0)) * 512  # allocated bytes on disk
-        fs_size   = int(st.st_size)                         # logical size (sparse includes holes)
-    except Exception:
-        pass
-
-    actual = qemu_actual or fs_blocks or fs_size
-    logger.info(
-        "[snapshot] size metrics file=%s actual=%d qemu_actual=%d qemu_virtual=%d fs_blocks=%d fs_size=%d",
-        str(path), actual, qemu_actual, qemu_virtual, fs_blocks, fs_size
-    )
-    return actual
+        st = os.stat(path, follow_symlinks=False)
+        blocks = getattr(st, "st_blocks", 0)
+        if blocks:
+            used = int(blocks) * 512
+            logger.info("[snapshot] usage file=%s st_blocks=%d used_bytes=%d", path, blocks, used)
+            return used
+        used = int(st.st_size)
+        logger.info("[snapshot] usage(fallback) file=%s st_size=%d", path, used)
+        return used
+    except Exception as e:
+        logger.warning("[snapshot] usage failed for %s: %s", path, e)
+        return 0
 
 @router.post("/snapshot")
 async def create_snapshot(
@@ -218,6 +203,7 @@ async def create_snapshot(
         if not os_type:
             raise HTTPException(status_code=400, detail="Missing os_type")
 
+        # vmid from client, else from store
         vmid = (request.vmid or "").strip()
         if not vmid:
             sess = store.get_running_by_user(user.id) or {}
@@ -225,12 +211,13 @@ async def create_snapshot(
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
+        # VM must be running (QMP present)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
         _, qmp_sock = mgr._socket_paths(vmid)
         if not qmp_sock.exists():
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        # Load quota
+        # Quota
         db_user = db.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -238,39 +225,66 @@ async def create_snapshot(
         used_mb = int(db_user.snapshot_stored or 0)
         logger.info("[snapshot] quota user=%s used=%dMB cap=%dMB", user.id, used_mb, cap_mb)
 
-        # Create live snapshot file
+        # Determine what to charge: existing snapshot OR overlay
+        snap_basename = f"{user.id}__{os_type}__{vmid}.qcow2"
+        snap_path = Path(SNAPSHOTS_PATH) / snap_basename
+
+        charge_src = None
+        charge_bytes = 0
+
+        if snap_path.exists():
+            charge_src = "existing_snapshot"
+            charge_bytes = _file_usage_bytes(snap_path)
+            logger.info("[snapshot] charging from existing snapshot: %s (%d bytes)", snap_path, charge_bytes)
+        else:
+            try:
+                overlay = mgr.overlay_path()
+            except Exception:
+                overlay = None
+            if overlay and Path(overlay).exists():
+                charge_src = "overlay"
+                charge_bytes = _file_usage_bytes(Path(overlay))
+                logger.info("[snapshot] charging from overlay: %s (%d bytes)", overlay, charge_bytes)
+            else:
+                # No existing snapshot and no overlay available — cannot determine charge base
+                logger.error("[snapshot] no charge source (no existing snapshot, no overlay)")
+                raise HTTPException(status_code=409, detail="No snapshot/overlay to base size on")
+
+        charge_mb = _bytes_to_mb(charge_bytes)
+        new_total = used_mb + charge_mb
+        logger.info("[snapshot] pre-check: source=%s charge=%dMB new_total=%dMB cap=%dMB",
+                    charge_src, charge_mb, new_total, cap_mb)
+
+        # Enforce quota BEFORE creating anything
+        if new_total > cap_mb:
+            deficit = new_total - cap_mb
+            logger.warning("[snapshot] over quota: need +%dMB (used=%d cap=%d planned_total=%d)",
+                           deficit, used_mb, cap_mb, new_total)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Not enough snapshot storage (need +{deficit} MB). "
+                       f"Used={used_mb} MB, NewTotal={new_total} MB, Cap={cap_mb} MB."
+            )
+
+        # Create/refresh snapshot file (live backup)
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
-        logger.info("[snapshot] created file=%s", str(out_path))
+        logger.info("[snapshot] created file=%s (source=%s charged=%dMB)", str(out_path), charge_src, charge_mb)
 
-        # Measure real allocated size and enforce quota
-        snap_bytes = _qcow_actual_bytes(out_path)
-        snap_mb    = _bytes_to_mb(snap_bytes)
-        new_total  = used_mb + snap_mb
-        logger.info("[snapshot] charge size=%dB (%dMB) new_total=%dMB cap=%dMB",
-                    snap_bytes, snap_mb, new_total, cap_mb)
-
-        if new_total > cap_mb:
-            try:
-                out_path.unlink(missing_ok=True)
-            finally:
-                deficit = new_total - cap_mb
-                logger.warning("[snapshot] over quota: need +%dMB (used=%d cap=%d new_total=%d)",
-                               deficit, used_mb, cap_mb, new_total)
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Not enough snapshot storage (need +{deficit} MB). "
-                           f"Used={used_mb} MB, NewTotal={new_total} MB, Cap={cap_mb} MB."
-                )
-
-        # Within quota: persist usage
+        # Persist usage by the chosen source size
         db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info("[snapshot] ok user=%s vmid=%s file=%s billed=%dMB total=%d/%dMB",
-                    user.id, vmid, out_path.name, snap_mb, new_total, cap_mb)
+        logger.info("[snapshot] ok user=%s vmid=%s billed=%dMB total=%d/%dMB file=%s",
+                    user.id, vmid, charge_mb, new_total, cap_mb, out_path.name)
 
-        return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": snap_mb}
+        return {
+            "status": "ok",
+            "snapshot": out_path.name,
+            "path": str(out_path),
+            "size_mb": charge_mb,
+            "charged_from": charge_src,
+        }
 
     except HTTPException:
         raise
