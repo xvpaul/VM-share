@@ -36,6 +36,71 @@ class RemoveSnapshotRequest(BaseModel):
     os_type: str | None = None   # optional fallbacks
     vmid: str | None = None
 
+def _qmp_send(sock_path: Path, payload: dict, timeout: float = 10.0) -> dict:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        s.connect(str(sock_path))
+        try: json.loads(s.recv(4096).decode(errors="ignore") or "{}")  # greeting
+        except Exception: pass
+        s.sendall((json.dumps({"execute": "qmp_capabilities"}) + "\n").encode())
+        try: json.loads(s.recv(4096).decode(errors="ignore") or "{}")
+        except Exception: pass
+        s.sendall((json.dumps(payload) + "\n").encode())
+        resp = s.recv(131072).decode(errors="ignore") or "{}"
+        try: return json.loads(resp)
+        except Exception: return {}
+
+def _active_writable_image(qmp_sock: Path) -> tuple[Path | None, str | None]:
+    """
+    Return (image_path, device_name) for the primary *writable* disk.
+    """
+    qb = _qmp_send(qmp_sock, {"execute": "query-block"})
+    devices = qb.get("return", []) if isinstance(qb, dict) else []
+
+    def _fmt(ins: dict) -> str:
+        if isinstance(ins.get("image"), dict):
+            return (ins["image"].get("format") or "").lower()
+        return (ins.get("drv") or "").lower()
+
+    def _fname(d: dict) -> str:
+        ins = d.get("inserted") or {}
+        if isinstance(ins.get("image"), dict):
+            fn = ins["image"].get("filename")
+            if fn: return fn
+        return ins.get("file") or ins.get("filename") or ""
+
+    # prefer non-RO, non-removable, qcow2/raw
+    for d in devices:
+        ins = d.get("inserted") or {}
+        if ins.get("ro") or ins.get("removable"):
+            continue
+        if _fmt(ins) in ("qcow2", "raw") or True:
+            fn = _fname(d)
+            if fn:
+                return Path(fn), d.get("device")
+
+    # last resort: any with a filename
+    for d in devices:
+        fn = _fname(d)
+        if fn:
+            return Path(fn), d.get("device")
+
+    return None, None
+
+def _img_actual_mb(img: Path) -> int:
+    """On-disk MiB (ceil), prefer qemu-img 'actual-size'."""
+    try:
+        p = subprocess.run(["qemu-img", "info", "--output=json", str(img)],
+                           capture_output=True, text=True)
+        if p.returncode == 0 and p.stdout:
+            info = json.loads(p.stdout)
+            n = int(info.get("actual-size") or info.get("virtual-size") or img.stat().st_size)
+        else:
+            n = img.stat().st_size
+    except Exception:
+        n = img.stat().st_size
+    return (n + (1024*1024 - 1)) // (1024*1024)  # ceil
+
 @router.post("/run-script")
 async def run_vm_script(
     request: RunScriptRequest,
@@ -175,20 +240,6 @@ def _bytes_to_mb(n: int) -> int:
     # ceil(n / (1024*1024)) without floats
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
 
-def _img_actual_mb(img: Path) -> int:
-    """On-disk MiB for qcow/raw (ceil). Prefer qemu-img 'actual-size'."""
-    try:
-        p = subprocess.run(["qemu-img", "info", "--output=json", str(img)],
-                           capture_output=True, text=True)
-        if p.returncode == 0 and p.stdout:
-            info = json.loads(p.stdout)
-            n = int(info.get("actual-size") or info.get("virtual-size") or img.stat().st_size)
-        else:
-            n = img.stat().st_size
-    except Exception:
-        n = img.stat().st_size
-    return (n + (1024*1024 - 1)) // (1024*1024)
-
 @router.post("/snapshot")
 async def create_snapshot(
     request: SnapshotRequest,
@@ -202,108 +253,57 @@ async def create_snapshot(
         if not os_type:
             raise HTTPException(status_code=400, detail="Missing os_type")
 
-        # vmid from client, else from store
         sess = store.get_running_by_user(user.id) or {}
         vmid = (request.vmid or "").strip() or (sess.get("vmid") or "")
-        logger.info("[snapshot] request user=%s os_type=%s vmid=%s", user.id, os_type, vmid)
+        logger.info("[snapshot] req user=%s os_type=%s vmid=%s", user.id, os_type, vmid)
         if not vmid:
             raise HTTPException(status_code=404, detail="No running VM found for this user")
 
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
-
-        # VM must be running (create_disk_snapshot uses QMP)
         _, qmp_sock = mgr._socket_paths(vmid)
-        logger.info("[snapshot] qmp_sock=%s exists=%s", qmp_sock, qmp_sock.exists())
+        logger.info("[snapshot] qmp=%s exists=%s", qmp_sock, qmp_sock.exists())
         if not qmp_sock.exists():
             raise HTTPException(status_code=409, detail="VM is not running (no QMP socket)")
 
-        # -------- Source selection with full logging --------
-        from pathlib import Path
-        snap_dir = Path(SNAPSHOTS_PATH)
-        try:
-            logger.info("[snapshot] SNAPSHOTS_PATH=%s exists=%s is_dir=%s",
-                        snap_dir, snap_dir.exists(), snap_dir.is_dir())
-        except Exception as e:
-            logger.warning("[snapshot] SNAPSHOTS_PATH inspect failed: %s", e)
+        # === QMP: find the exact attached image path ===
+        src_path, dev_name = _active_writable_image(qmp_sock)
+        logger.info("[snapshot] dev=%s src=%s", dev_name, src_path)
+        if not src_path or not src_path.exists():
+            raise HTTPException(status_code=409, detail="No writable disk attached (ISO-only?)")
 
-        # Candidate 1 (best): what the VM is actually using right now (set by boot_vm)
-        sess_overlay = sess.get("overlay") or ""
-        cand_session = Path(sess_overlay) if sess_overlay else None
-
-        # Candidate 2: expected snapshot name for this vmid
-        cand_snapshot = snap_dir / f"{user.id}__{os_type}__{vmid}.qcow2"
-
-        # Candidate 3: overlay path by convention (prefix == os_type)
-        try:
-            cand_overlay = mgr.overlay_path()
-        except Exception as e:
-            logger.warning("[snapshot] overlay_path() failed: %s", e)
-            cand_overlay = None
-
-        candidates = [
-            ("session", cand_session),
-            ("snapshot", cand_snapshot),
-            ("overlay", cand_overlay),
-        ]
-
-        chosen = None
-        src = None
-        for label, path in candidates:
-            if not path:
-                logger.info("[snapshot] candidate %s: (none)", label)
-                continue
-            try:
-                exists = path.exists()
-            except Exception as e:
-                logger.info("[snapshot] candidate %s: %s exists=error(%s)", label, path, e)
-                continue
-            logger.info("[snapshot] candidate %s: %s exists=%s", label, path, exists)
-            if exists and path.is_file():
-                chosen, src = label, path
-                break
-
-        if not src:
-            raise HTTPException(
-                status_code=409,
-                detail=("No source disk image found; tried:\n"
-                        f" - session:  {cand_session}\n"
-                        f" - snapshot: {cand_snapshot}\n"
-                        f" - overlay:  {cand_overlay}")
-            )
-
-        logger.info("[snapshot] using %s as billing source: %s", chosen, src)
-
-        # -------- Quota / size accounting --------
+        # === Quota ===
         db_user = db.get(User, user.id)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
         cap_mb  = int(db_user.snapshot_storage_capacity or 0)
         used_mb = int(db_user.snapshot_stored or 0)
 
-        # Rich size probe for logs
+        # Bill by active image actual-size
+        bill_mb = _img_actual_mb(src_path)
+        new_total = used_mb + bill_mb
+
+        # extra size details for logs
         qimg_fmt = qimg_actual = qimg_virtual = None
         try:
-            p = subprocess.run(["qemu-img", "info", "--output=json", str(src)],
+            p = subprocess.run(["qemu-img", "info", "--output=json", str(src_path)],
                                capture_output=True, text=True)
             if p.returncode == 0 and p.stdout:
                 j = json.loads(p.stdout)
                 qimg_fmt     = j.get("format")
-                qimg_actual  = int(j.get("actual-size")) if j.get("actual-size") is not None else None
-                qimg_virtual = int(j.get("virtual-size")) if j.get("virtual-size") is not None else None
+                qimg_actual  = j.get("actual-size")
+                qimg_virtual = j.get("virtual-size")
         except Exception as e:
-            logger.warning("[snapshot] qemu-img info failed for %s: %s", src, e)
+            logger.warning("[snapshot] qemu-img info failed: %s", e)
 
         try:
-            stat_bytes = src.stat().st_size
+            stat_bytes = src_path.stat().st_size
         except Exception:
             stat_bytes = None
 
-        bill_mb = _img_actual_mb(src)   # your helper: bill by actual on-disk MiB (ceil)
-        new_total = used_mb + bill_mb
-
         logger.info(
-            "[snapshot] size probe src=%s fmt=%s actual=%sB virtual=%sB stat=%sB billed=%sMB used=%sMB cap=%sMB new_total=%sMB",
-            src, (qimg_fmt or "?"),
+            "[snapshot] size src=%s fmt=%s actual=%sB virtual=%sB stat=%sB bill=%sMB used=%sMB cap=%sMB new=%sMB",
+            src_path,
+            (qimg_fmt or "?"),
             (qimg_actual if qimg_actual is not None else "n/a"),
             (qimg_virtual if qimg_virtual is not None else "n/a"),
             (stat_bytes if stat_bytes is not None else "n/a"),
@@ -313,14 +313,14 @@ async def create_snapshot(
         if new_total > cap_mb:
             deficit = new_total - cap_mb
             logger.warning("[snapshot] quota exceeded user=%s need+%sMB used=%sMB cap=%sMB billed=%sMB src=%s",
-                           user.id, deficit, used_mb, cap_mb, bill_mb, src)
+                           user.id, deficit, used_mb, cap_mb, bill_mb, src_path)
             raise HTTPException(
                 status_code=413,
                 detail=f"Not enough snapshot storage (need +{deficit} MB). "
                        f"Used={used_mb} MB, WouldBe={new_total} MB, Cap={cap_mb} MB."
             )
 
-        # -------- Create the snapshot (QMP drive-backup) --------
+        # === Create snapshot (your create_disk_snapshot uses QMP drive-backup) ===
         snap_name = f"{user.id}__{os_type}__{vmid}"
         out_path: Path = mgr.create_disk_snapshot(snap_name)
 
@@ -328,15 +328,14 @@ async def create_snapshot(
             out_bytes = out_path.stat().st_size
         except Exception:
             out_bytes = None
-        logger.info("[snapshot] created file=%s size_bytes=%s (billed=%sMB)",
-                    out_path, (out_bytes if out_bytes is not None else "n/a"), bill_mb)
+        logger.info("[snapshot] created=%s bytes=%s (billed=%sMB)", out_path, (out_bytes or "n/a"), bill_mb)
 
-        # Persist usage
+        # === Persist usage ===
         db_user.snapshot_stored = new_total
         db.commit()
 
-        logger.info("[snapshot] ok user=%s vmid=%s billed_src=%s billed_mb=%s total_mb=%s/%s out=%s",
-                    user.id, vmid, src, bill_mb, new_total, cap_mb, out_path)
+        logger.info("[snapshot] OK user=%s vmid=%s dev=%s src=%s billed=%sMB total=%s/%s out=%s",
+                    user.id, vmid, dev_name, src_path, bill_mb, new_total, cap_mb, out_path)
 
         return {"status": "ok", "snapshot": out_path.name, "path": str(out_path), "size_mb": bill_mb}
 
@@ -348,7 +347,6 @@ async def create_snapshot(
     except Exception as e:
         logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
-
 
 @router.post("/run_snaphot")
 async def run_snapshot(
