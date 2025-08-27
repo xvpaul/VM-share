@@ -228,7 +228,7 @@ async def user_info(
 ):
     try:
         sess = store.get_running_by_user(user.id) or {}
-        os_type = sess.get("os_type") or sess.get("os") or "Virtual Machine"
+        os_type = sess.get("os_type") or "Virtual Machine"
         vmid = sess.get("vmid")
         logger.info("[user_info] user=%s vmid=%s os=%s", user.id, vmid, os_type)
         return {"os_type": os_type, "vmid": vmid}

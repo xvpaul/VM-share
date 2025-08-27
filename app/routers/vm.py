@@ -297,69 +297,71 @@ async def create_snapshot(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 # remove later
-# @router.post("/run_snaphot")
-# async def run_snapshot(
-#     request: RunScriptRequest,
-#     user: User = Depends(get_current_user),
-#     store: SessionStore = Depends(get_session_store),
-#     ws: WebsockifyService = Depends(get_websockify_service),
-# ):
-#     try:
-#         user_id = str(user.id)
-#         os_type = request.os_type
-#         snap_name = (request.snapshot or "").strip()
-#         if not snap_name:
-#             raise HTTPException(status_code=400, detail="Missing snapshot")
+@router.post("/run_snaphot")
+async def run_snapshot(
+    request: RunScriptRequest,
+    user: User = Depends(get_current_user),
+    store: SessionStore = Depends(get_session_store),
+    ws: WebsockifyService = Depends(get_websockify_service),
+):
+    try:
+        user_id = str(user.id)
+        os_type = request.os_type
+        snap_name = (request.snapshot or "").strip()
+        logger.info(f"[run_snapshot] {snap_name}")
+        if not snap_name:
+            raise HTTPException(status_code=400, detail="Missing snapshot")
 
-#         existing = store.get_running_by_user(user_id)
-#         if existing is not None:
-#             logger.info(f"[run_snapshot] User {user_id} already has VM {existing['vmid']}")
-#             return JSONResponse({
-#                 "message": f"VM already running for user {user.login}",
-#                 "vm": existing,
-#                 "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
-#             })
+        existing = store.get_running_by_user(user_id)
+        if existing is not None:
+            logger.info(f"[run_snapshot] User {user_id} already has VM {existing['vmid']}")
+            return JSONResponse({
+                "message": f"VM already running for user {user.login}",
+                "vm": existing,
+                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
+            })
 
-#         vmid = secrets.token_hex(6)
-#         logger.info(f"[run_snapshot] Launch from snapshot requested by {user.login} (id={user_id}); vmid={vmid}; snap={snap_name}")
+        vmid = secrets.token_hex(6)
+        logger.info(f"[run_snapshot] Launch from snapshot requested by {user.login} (id={user_id}); vmid={vmid}; snap={snap_name}")
 
-#         # Resolve snapshot path (accept absolute or basename)
-#         snap_path = Path(snap_name)
-#         if not snap_path.is_absolute():
-#             snap_path = Path(SNAPSHOTS_PATH) / snap_path.name
-#         if not snap_path.exists():
-#             raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
+        # Resolve snapshot path (accept absolute or basename)
+        snap_path = Path(snap_name)
+        if not snap_path.is_absolute():
+            snap_path = Path(SNAPSHOTS_PATH) / snap_path.name
+        if not snap_path.exists():
+            raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
 
-#         manager = QemuOverlayManager(user_id, vmid, os_type)
+        manager = QemuOverlayManager(user_id, vmid, os_type)
 
-#         # Boot directly from the snapshot image
-#         meta = manager.boot_vm(vmid, drive_path=str(snap_path))
-#         logger.info(f"[run_snapshot] VM booted from snapshot (vmid={vmid})")
+        # Boot directly from the snapshot image
+        meta = manager.boot_vm(vmid, drive_path=str(snap_path))
+        logger.info(f"[run_snapshot] VM booted from snapshot (vmid={vmid})")
 
-#         # Target for websockify
-#         target = meta["vnc_socket"] if "vnc_socket" in meta else f"{meta['vnc_host']}:{meta['vnc_port']}"
-#         http_port = ws.start(vmid, target)
-#         logger.info(f"[run_snapshot] Websockify on :{http_port} for VM {vmid}")
+        # Target for websockify
+        target = meta["vnc_socket"] if "vnc_socket" in meta else f"{meta['vnc_host']}:{meta['vnc_port']}"
+        http_port = ws.start(vmid, target)
+        logger.info(f"[run_snapshot] Websockify on :{http_port} for VM {vmid}")
 
-#         store.set(vmid, {
-#             **meta,
-#             "user_id": user_id,
-#             "http_port": http_port,
-#             "os_type": os_type,
-#             "pid": meta['pid'],
-#         })
+        store.set(vmid, {
+            **meta,
+            "user_id": user_id,
+            "http_port": http_port,
+            "os_type": os_type,
+            "pid": meta['pid'],
+        })
 
-#         return JSONResponse({
-#             "message": f"VM for user {user.login} launched from snapshot (vmid={vmid})",
-#             "vm": {"vmid": vmid, **meta},
-#             "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
-#         })
+        return JSONResponse({
+            "message": f"VM for user {user.login} launched from snapshot (vmid={vmid})",
+            "vm": {"vmid": vmid, **meta},
+            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
+        })
 
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         logger.exception(f"[run_snapshot] Failed for user {user.login} (id={user.id}): {e}")
-#         raise HTTPException(status_code=500, detail="Internal server error")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[run_snapshot] Failed for user {user.login} (id={user.id}): {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
 
 @router.get("/get_user_snapshots")
 async def get_user_snapshots(user: User = Depends(get_current_user)):
