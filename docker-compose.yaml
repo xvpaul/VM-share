@@ -4,6 +4,8 @@ services:
     container_name: vmshare-app
     expose: ["8000"]
     env_file: [.env]          # <-- this loads .env into the app container
+    extra_hosts: 
+          - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   nginx:
