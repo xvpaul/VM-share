@@ -15,5 +15,5 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/sites:/etc/nginx/sites-enabled:ro
       - ./nginx/certs:/etc/nginx/certs:ro
-      - ./docs:/var/www/vmshare/static:ro
+      - ./app/static:/var/www/vmshare/static:ro
     restart: unless-stopped
