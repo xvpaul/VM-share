@@ -1,6 +1,6 @@
 # /app/methods/manager/OverlayManager.py
 import platform, shutil, subprocess, os, tempfile, time, json, re, socket
-from configs.config import SNAPSHOTS_PATH, VM_PROFILES
+from configs.config import SNAPSHOTS_PATH, VM_PROFILES, LOG_DIR
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
@@ -79,19 +79,26 @@ class QemuOverlayManager:
                 pidfile.unlink()
         except Exception as e:
             logger.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
-
+        log_dir = LOG_DIR
         cmd = [
-            "qemu-system-x86_64",
-            "-enable-kvm",
-            "-m", mem,
-            "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
-            "-nic", "user,model=virtio-net-pci",
-            "-vnc", f"unix:{vnc_sock}",
-            "-qmp", f"unix:{qmp_sock},server,nowait",
-            "-display", "none",
-            "-daemonize",
-            "-pidfile", str(pidfile),
-        ]
+                "qemu-system-x86_64",
+                "-enable-kvm",
+                "-machine", "pc,accel=kvm,kernel-irqchip=off",
+                "-cpu", "qemu64,-tsc-deadline,-x2apic",
+                "-m", mem,
+                "-drive", f"file={image},format=qcow2,if=ide,cache=none",
+                "-nic", "user,model=e1000",
+                "-vnc", f"unix:{vnc_sock}",
+                "-serial", f"file:{log_dir}/serial_kvm.log",
+                "-d", "guest_errors,unimp",
+                "-D", f"{log_dir}/qemu_kvm.log",
+                "-rtc", "base=utc,clock=host",
+                "-global", "kvm-pit.lost_tick_policy=discard",
+                "-display", "none",
+                "-name", "repro-kvm",
+                # no -daemonize for the repro; add it back later
+                ]
+
 
         logger.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
