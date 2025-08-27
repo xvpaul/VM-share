@@ -2,30 +2,18 @@ services:
   app:
     build: .
     container_name: vmshare-app
-    expose: ["8000"]         # your app must listen on 0.0.0.0:8000 inside the container
-    restart: unless-stopped
-
-  # OPTIONAL: Websockify (noVNC). Delete if you don't need it yet.
-  # And keep /websockify/ proxy in nginx if you do.
-  websockify:
-    image: novnc/websockify
-    container_name: vmshare-websockify
-    command: ["--web", "/usr/share/novnc", "6080", "host.docker.internal:5900"]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    expose: ["6080"]
+    expose: ["8000"]
+    env_file: [.env]          # <-- this loads .env into the app container
     restart: unless-stopped
 
   nginx:
     image: nginx:stable
     container_name: vmshare-nginx
-    depends_on:
-      - app
-      # - websockify   # uncomment if you keep the service above
+    depends_on: [app]
     ports: ["80:80", "443:443"]
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/sites:/etc/nginx/sites-enabled:ro
       - ./nginx/certs:/etc/nginx/certs:ro
-      - ./docs:/var/www/vmshare/static:ro   # optional
+      - ./docs:/var/www/vmshare/static:ro
     restart: unless-stopped
