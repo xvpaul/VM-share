@@ -297,7 +297,7 @@ async def create_snapshot(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 # remove later
-@router.post("/run_snaphot")
+@router.post("/run_snapshot")
 async def run_snapshot(
     request: RunScriptRequest,
     user: User = Depends(get_current_user),
