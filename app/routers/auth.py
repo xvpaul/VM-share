@@ -222,7 +222,7 @@ async def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "login": user.login, "role": user.role}
 
 @router.get("/user_info")
-async def me(
+async def user_info(
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
 ):
