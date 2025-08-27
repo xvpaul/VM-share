@@ -438,7 +438,7 @@ async function runSnapshot(s, btn) {
 
     // Your /vm/run_snaphot currently expects { os_type, snapshot }.
     // (If you later add vmid in the API model, you can include it here too.)
-    const body = { os_type: osType, vmid: vmid};
+    const body = { os_type: osType, vmid: s.id};
 
     const res = await fetch(RUN_VM_ENDPOINT, {
       method: 'POST',
