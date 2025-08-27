@@ -1,32 +1,36 @@
-version: "3.8"
-
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: vmshare_app
+    build: .
+    container_name: vmshare-app
+    expose:
+      - "8000"         # uvicorn/gunicorn should listen on 0.0.0.0:8000
     restart: unless-stopped
-    working_dir: /VM_share/app
-    environment:
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
-    # publish the SAME port your server expects
-    ports:
-      - "8000:8000"
-    # mount your tree 1:1 so ALL subfolders/files are there
-    volumes:
-      - ${HOST_ROOT}/VM_share:/VM_share
-      - ${HOST_ROOT}/base_images:/base_images:ro
-      - ${HOST_ROOT}/iso:/iso:ro
-      - ${HOST_ROOT}/cloud:/cloud
-      - ${HOST_ROOT}/logs:/logs
-      - ${HOST_ROOT}/custom:/custom
-      - ${HOST_ROOT}/overlays:/overlays
-    # optional hardening you can enable later:
-    # read_only: true
-    # tmpfs: ["/tmp", "/run"]
-    # cap_drop: ["ALL"]
 
-networks:
-  default:
-    name: vmshare_net
+  # OPTIONAL: Websockify (noVNC). If you don't use it, delete this service
+  # and in nginx/sites/vmshare.conf change proxy_pass for /websockify/ to 127.0.0.1:6080 if you run it on the host.
+  websockify:
+    image: novnc/websockify
+    container_name: vmshare-websockify
+    command: ["--web", "/usr/share/novnc", "6080", "host.docker.internal:5900"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "6080"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:stable
+    container_name: vmshare-nginx
+    depends_on:
+      - app
+    # if you kept the websockify service above, also depend on it:
+    # depends_on: [app, websockify]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/sites:/etc/nginx/sites-enabled:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./docs:/var/www/vmshare/static:ro   # optional
+    restart: unless-stopped
