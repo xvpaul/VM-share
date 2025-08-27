@@ -20,7 +20,6 @@ from methods.manager.WebsockifyService import WebsockifyService
 
 logger = logging.getLogger(__name__)
 
-
 router = APIRouter()
 
 class RunScriptRequest(BaseModel):
@@ -208,6 +207,7 @@ async def create_snapshot(
 
         # vmid from client, else from store
         vmid = (request.vmid or "").strip()
+        logger.info("[snapshot] vmid get from front %s", vmid)
         if not vmid:
             sess = store.get_running_by_user(user.id) or {}
             vmid = sess.get("vmid")
