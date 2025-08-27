@@ -81,8 +81,8 @@ class QemuOverlayManager:
             logger.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
         cmd = [
-            "qemu-system-x86_64",
-            "-enable-kvm",
+            "qemu-system-amd",
+            # "-enable-kvm",
             "-m", mem,
             "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
