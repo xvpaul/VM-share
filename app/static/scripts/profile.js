@@ -362,13 +362,28 @@ promForm?.addEventListener('submit', async (e) => {
 const uiToast  = (msg, lvl = 'ok')  => (window.toast ? window.toast(msg, lvl) : console.log(`[toast:${lvl}] ${msg}`));
 const uiStatus = (txt, lvl = 'info') => (window.setStatus ? window.setStatus(txt, lvl) : console.log(`[status:${lvl}] ${txt}`));
 
-// Helper: extract os_type (2nd segment) from "{user}__{os_type}__{vmid}[.ext]"
-function extractOsTypeFromSnapshotId(id) {
-  if (!id) return 'unknown';
-  const base = String(id).split(/[\\/]/).pop();
-  const parts = base.split('__');
-  return (parts.length >= 3 && parts[1]) ? parts[1] : 'unknown';
+// Parse "{userId}__{os_type}__{vmid}[.ext]" from a full path or bare name.
+// Returns: { userId, osType, vmid, baseName } — fields are 'unknown' if not found.
+function parseSnapshotId(id) {
+  const base = String(id).split(/[\\/]/).pop(); // strip directories
+  // Prefer a strict match: 123__alpine__abcdef123(.qcow2)
+  let m = base.match(/^(\d+)__([A-Za-z0-9_-]+)__([A-Fa-f0-9]+)(?:\.[^.]+)?$/);
+  if (m) {
+    return { userId: m[1], osType: m[2], vmid: m[3], baseName: base };
+  }
+
+  // Fallback: split on "__", strip final extension
+  const noExt = base.replace(/\.[^.]+$/, ''); // drop single trailing extension
+  const parts = noExt.split('__');
+  const [userId, osType, vmid] = parts.length >= 3 ? parts : ['unknown','unknown','unknown'];
+  return {
+    userId: userId || 'unknown',
+    osType: osType || 'unknown',
+    vmid:  vmid  || 'unknown',
+    baseName: base
+  };
 }
+
 
 async function deleteSnapshot(s, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
@@ -416,25 +431,32 @@ async function runSnapshot(s, btn) {
     const snapshotId = s.name || s.id || s.path || s.file;
     if (!snapshotId) throw new Error('No snapshot identifier');
 
-    const osType = extractOsTypeFromSnapshotId(snapshotId);
+    const { userId, osType, vmid, baseName } = parseSnapshotId(snapshotId);
+    if (osType === 'unknown' || vmid === 'unknown') {
+      throw new Error(`Bad snapshot name: "${snapshotId}"`);
+    }
+
+    // Your /vm/run_snaphot currently expects { os_type, snapshot }.
+    // (If you later add vmid in the API model, you can include it here too.)
+    const body = { os_type: osType, snapshot: baseName /*, vmid */ };
 
     const res = await fetch(RUN_VM_ENDPOINT, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ os_type: osType, snapshot: snapshotId })
+      body: JSON.stringify(body)
     });
 
     let redirectUrl = null;
-    let msg = res.ok ? 'VM starting…' : 'Failed to start VM';
+    let msg = res.ok ? `VM starting from ${baseName}…` : 'Failed to start VM';
 
     try {
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('application/json')) {
         const data = await res.json();
         if (data?.redirect) redirectUrl = data.redirect;
-        const id = data.id || data.name || data.snapshot || '';
-        if (res.ok && id && !redirectUrl) msg = `VM starting from ${id}…`;
+        // Prefer server message if present
+        if (typeof data?.message === 'string') msg = data.message;
       } else {
         redirectUrl = res.headers.get('Location');
         if (!redirectUrl) {
@@ -462,6 +484,7 @@ async function runSnapshot(s, btn) {
     if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
   }
 }
+
 
 function renderSnapshots(list) {
   const table = document.createElement('table');
