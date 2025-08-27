@@ -8,7 +8,7 @@
 const PROM_PROXY = '/metrics';
 const APP_JSON = '/metrics_json';
 const SNAPSHOTS_ENDPOINT = '/vm/get_user_snapshots';
-const RUN_VM_ENDPOINT = '/vm/run-script'
+const RUN_VM_ENDPOINT = '/vm/run-script' // changed endpoint from run_snapshot
 const AUTH_ME = '/auth/me';
 const AUTH_LOGOUT = '/auth/logout';
 const REMOVE_SNAPSHOT_ENDPOINT = '/vm/remove_snapshot';
