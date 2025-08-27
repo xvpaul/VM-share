@@ -81,7 +81,7 @@ class QemuOverlayManager:
             logger.warning(f"Failed to remove existing pidfile {pidfile}: {e}")
 
         cmd = [
-            "qemu-system-amd",
+            "qemu-system-x86_64",
             # "-enable-kvm",
             " -machine pc,accel=kvm,kernel-irqchip=off",
             "-cpu EPYC,pmu=off,-tsc-deadline,-hle,-rtm ",
