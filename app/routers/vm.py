@@ -207,7 +207,7 @@ async def create_snapshot(
 
         # vmid from client, else from store
         vmid = (request.vmid or "").strip()
-        logger.info("[snapshot] vmid get from front %s", vmid)
+        logger.info("[snapshot] vmid get from front %s", request.vmid)
         if not vmid:
             sess = store.get_running_by_user(user.id) or {}
             vmid = sess.get("vmid")
