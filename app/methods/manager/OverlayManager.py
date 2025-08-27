@@ -82,7 +82,7 @@ class QemuOverlayManager:
 
         cmd = [
             "qemu-system-x86_64",
-            # "-enable-kvm",
+            "-enable-kvm",
             "-m", mem,
             "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
