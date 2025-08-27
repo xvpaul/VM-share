@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def parse_snapshot_name(name: str):
+    """
+    Parse "<userId>__<os_type>__<vmid>.qcow2" (path or filename).
+    Returns (user_id, os_type, vmid).
+    """
+    base = os.path.basename(name)
+    if base.endswith(".qcow2"):
+        base = base[:-6]
+    parts = base.split("__", 2)
+    if len(parts) != 3 or not all(parts):
+        raise ValueError(f"Invalid snapshot name: {name!r}")
+    user_id, os_type, vmid = parts
+    return user_id, os_type, vmid
+
 class RunScriptRequest(BaseModel):
     os_type: str
     snapshot: str | None = None  # optional, used by /run_snaphot
@@ -305,13 +319,12 @@ async def run_snapshot(
     ws: WebsockifyService = Depends(get_websockify_service),
 ):
     try:
-        user_id = str(user.id)
-        os_type = request.os_type
-        snap_name = (request.snapshot or "").strip()
+        snap_name = request.snapshot
+        user_id, os_type, vmid = parse_snapshot_name(snap_name)
         logger.info(f"[run_snapshot] {snap_name}")
         if not snap_name:
             raise HTTPException(status_code=400, detail="Missing snapshot")
-
+        
         existing = store.get_running_by_user(user_id)
         if existing is not None:
             logger.info(f"[run_snapshot] User {user_id} already has VM {existing['vmid']}")
@@ -321,7 +334,6 @@ async def run_snapshot(
                 "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
             })
 
-        vmid = secrets.token_hex(6)
         logger.info(f"[run_snapshot] Launch from snapshot requested by {user.login} (id={user_id}); vmid={vmid}; snap={snap_name}")
 
         # Resolve snapshot path (accept absolute or basename)
