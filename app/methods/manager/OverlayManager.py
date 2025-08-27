@@ -84,7 +84,7 @@ class QemuOverlayManager:
             "qemu-system-x86_64",
             # "-enable-kvm",
             " -machine pc,accel=kvm,kernel-irqchip=off",
-            "-cpu EPYC,pmu=off,-tsc-deadline,-hle,-rtm ",
+            "-cpu EPYC,pmu=off,-tsc-deadline,-hle,-rtm",
             "-m", mem,
             "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
