@@ -83,8 +83,6 @@ class QemuOverlayManager:
         cmd = [
             "qemu-system-x86_64",
             # "-enable-kvm",
-            " -machine pc,accel=kvm,kernel-irqchip=off",
-            "-cpu EPYC,pmu=off,-tsc-deadline,-hle,-rtm",
             "-m", mem,
             "-drive", f"file={image},format=qcow2,if=virtio,cache=writeback,discard=unmap",
             "-nic", "user,model=virtio-net-pci",
@@ -94,7 +92,7 @@ class QemuOverlayManager:
             "-daemonize",
             "-pidfile", str(pidfile),
         ]
-    
+
         logger.info(f"Launching QEMU for user {self.user_id} with vmid={vmid}, os_type={self.os_type}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
