@@ -2,20 +2,18 @@ services:
   app:
     build: .
     container_name: vmshare-app
-    expose:
-      - "8000"         # uvicorn/gunicorn should listen on 0.0.0.0:8000
+    expose: ["8000"]         # your app must listen on 0.0.0.0:8000 inside the container
     restart: unless-stopped
 
-  # OPTIONAL: Websockify (noVNC). If you don't use it, delete this service
-  # and in nginx/sites/vmshare.conf change proxy_pass for /websockify/ to 127.0.0.1:6080 if you run it on the host.
+  # OPTIONAL: Websockify (noVNC). Delete if you don't need it yet.
+  # And keep /websockify/ proxy in nginx if you do.
   websockify:
     image: novnc/websockify
     container_name: vmshare-websockify
     command: ["--web", "/usr/share/novnc", "6080", "host.docker.internal:5900"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    expose:
-      - "6080"
+    expose: ["6080"]
     restart: unless-stopped
 
   nginx:
@@ -23,11 +21,8 @@ services:
     container_name: vmshare-nginx
     depends_on:
       - app
-    # if you kept the websockify service above, also depend on it:
-    # depends_on: [app, websockify]
-    ports:
-      - "80:80"
-      - "443:443"
+      # - websockify   # uncomment if you keep the service above
+    ports: ["80:80", "443:443"]
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/sites:/etc/nginx/sites-enabled:ro
