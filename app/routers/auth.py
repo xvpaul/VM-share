@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from methods.auth.auth import get_current_user, Authentification
 from configs.config import COOKIE_MAX_AGE
 from methods.manager.SessionManager import get_session_store, SessionStore
+from app.security.recaptcha import verify_recaptcha_or_400
 from utils import cleanup_vm
 
 
@@ -19,17 +20,25 @@ logger = logging.getLogger(__name__)
 class LoginJSON(BaseModel):
     username: str
     password: str
+    g_recaptcha_response: str = Field(..., alias="g_recaptcha_response")
+
+class RegisterJSON(BaseModel):
+    login: str
+    password: str
+    g_recaptcha_response: str
 
 
 router = APIRouter()
 
 @router.post("/register")
-async def register_user(request: Request, db: Session = Depends(get_db)):
+async def register_user(payload: RegisterJSON, request: Request, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
-        body = await request.json()
-        login = body.get("login")   # <------ swap to username back
-        password = body.get("password")
+        # 1) reCAPTCHA check
+        await verify_recaptcha_or_400(payload.g_recaptcha_response, request.client.host)
+
+        login = payload.login
+        password = payload.password
 
         if not login or not password:
             logger.warning("VM_share/app/routers/auth.py: Registration failed: missing login or password")
@@ -38,29 +47,11 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         existing = db.query(User).filter(User.login == login).first()
         if existing:
             if Authentification.verify_password(password, existing.hashed_password):
-                # token = Authentification.create_access_token({"sub": existing.login})
-                # resp = JSONResponse({
-                #     "message": "Logged in",
-                #     "id": existing.id,
-                #     "access_token": token,
-                #     "token_type": "bearer"
-                # })
-                # resp.set_cookie(
-                #     key="access_token",
-                #     value=token,
-                #     httponly=True,
-                #     secure=False,      # <------ TRUE!!!!
-                #     samesite="lax",
-                #     path="/",
-                #     max_age=60*60*8,  
-                # )
-                # return resp
                 raise HTTPException(status_code=409, detail="User exists")
             else:
                 logger.warning(f"VM_share/app/routers/auth.py: Login failed for existing user '{login}': wrong password")
                 raise HTTPException(status_code=401, detail="User exists, wrong password")
 
-        # new user
         hashed = Authentification.hash_password(password)
         new_u = User(login=login, hashed_password=hashed)
         db.add(new_u); db.commit(); db.refresh(new_u)
@@ -72,30 +63,24 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
             "access_token": token,
             "token_type": "bearer"
         })
-        # resp.set_cookie(
-        #     key="access_token",
-        #     value=token,
-        #     httponly=True,
-        #     secure=False,
-        #     samesite="lax", # <----- switch to lax back
-        #     path="/",
-        #     max_age=60*60*8,
-        # )
         dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
         set_auth_cookie(resp, token, dev_localhost=dev_localhost)
-
         return resp
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{body.get('login', 'unknown')}': {e}")
+        logger.exception(f"VM_share/app/routers/auth.py: Registration/login error for user '{getattr(payload, 'login', 'unknown')}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
     
 @router.post("/login")
-async def login_user(payload: LoginJSON, db: Session = Depends(get_db)):
+async def login_user(payload: LoginJSON, request: Request, db: Session = Depends(get_db)):
     try:
-        logger.info(f"VM_share/app/routers/auth.py: /login attempt for user '{payload.username}'")
+        # 1) reCAPTCHA check
+        await verify_recaptcha_or_400(payload.g_recaptcha_response, request.client.host)
 
+        logger.info(f"VM_share/app/routers/auth.py: /login attempt for user '{payload.username}'")
         auth = Authentification(payload.username, payload.password)
         user = auth.authenticate_user(db)
         if not user:
@@ -146,9 +131,12 @@ def set_auth_cookie(resp: JSONResponse, token: str, *, dev_localhost: bool = Tru
     )
 
 @router.post("/token")
-def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
+async def login_token_alias(payload: LoginJSON, request: Request, db: Session = Depends(get_db)):
     from methods.auth.auth import Authentification
     try:
+        # 1) reCAPTCHA check
+        await verify_recaptcha_or_400(payload.g_recaptcha_response, request.client.host)
+
         logger.info(f"VM_share/app/routers/auth.py: /token login attempt for user '{payload.username}'")
 
         auth = Authentification(payload.username, payload.password)
@@ -169,7 +157,7 @@ def login_token_alias(payload: LoginJSON, db: Session = Depends(get_db)):
             user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
         )
 
-        set_auth_cookie(resp, token, dev_localhost=dev_localhost)  # FALSE FALSE FALSE!!!
+        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
         logger.info(f"VM_share/app/routers/auth.py: /token login succeeded for '{user.login}' (cookie set)")
         return resp
 

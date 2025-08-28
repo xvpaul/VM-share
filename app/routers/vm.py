@@ -45,7 +45,7 @@ class SnapshotRequest(BaseModel):
     vmid: str | None = None  # allow FE to pass vmid; fallback to store if omitted
 
 class RemoveSnapshotRequest(BaseModel):
-    snapshot: str | None = None
+    uid: str | None = None
     os_type: str | None = None   # optional fallbacks
     vmid: str | None = None
 
