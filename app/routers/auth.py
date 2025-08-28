@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from methods.auth.auth import get_current_user, Authentification
 from configs.config import COOKIE_MAX_AGE
 from methods.manager.SessionManager import get_session_store, SessionStore
-from app.security.recaptcha import verify_recaptcha_or_400
+from security.recaptcha import verify_recaptcha_or_400
 from utils import cleanup_vm
 
 
