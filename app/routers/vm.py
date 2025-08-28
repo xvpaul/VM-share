@@ -230,6 +230,7 @@ async def create_snapshot(
 
         # Manager (for paths)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
+        overlay_path = mgr.create_overlay()
 
         # Quota
         db_user = db.get(User, user.id)
