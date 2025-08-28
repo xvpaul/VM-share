@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from methods.database.database import get_db
 from methods.database.models import User
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from methods.auth.auth import get_current_user, Authentification
 from configs.config import COOKIE_MAX_AGE
 from methods.manager.SessionManager import get_session_store, SessionStore
