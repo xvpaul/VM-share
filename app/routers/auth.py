@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class LoginJSON(BaseModel):
     username: str
     password: str
-    g_recaptcha_response: str = Field(..., alias="g_recaptcha_response")
+    g_recaptcha_response: str
 
 class RegisterJSON(BaseModel):
     login: str
