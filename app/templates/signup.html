@@ -83,23 +83,24 @@
   </main>
 
   <script>
-    // Render widgets explicitly so we get widget IDs
-    let widgetSignin = null;
-    let widgetSignup = null;
+  // make them global so module JS can read them
+  window.widgetSignin = null;
+  window.widgetSignup = null;
 
-    window.onRecaptchaLoad = function () {
-      widgetSignin = grecaptcha.render("recaptcha-signin", {
-        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-        theme: "dark"
-      });
-      widgetSignup = grecaptcha.render("recaptcha-signup", {
-        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-        theme: "dark"
-      });
-    };
-  </script>
+  window.onRecaptchaLoad = function () {
+    window.widgetSignin = grecaptcha.render("recaptcha-signin", {
+      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+      theme: "dark"
+    });
+    window.widgetSignup = grecaptcha.render("recaptcha-signup", {
+      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+      theme: "dark"
+    });
+  };
+</script>
+
   <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
 
-  <script type="module" src="static/scripts/signup.js"></script>
+  <script type="module" src="static/scripts/signup.js?v=20250829a"></script>
 </body>
 </html>
