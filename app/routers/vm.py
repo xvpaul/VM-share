@@ -230,7 +230,6 @@ async def create_snapshot(
 
         # Manager (for paths)
         mgr = QemuOverlayManager(user_id=str(user.id), vmid=vmid, os_type=os_type)
-        overlay_path = mgr.create_overlay()
 
         # Quota
         db_user = db.get(User, user.id)
@@ -345,6 +344,7 @@ async def run_snapshot(
             raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
 
         manager = QemuOverlayManager(user_id, vmid, os_type)
+        overlay_path = manager.create_overlay()
 
         # Boot directly from the snapshot image
         meta = manager.boot_vm(vmid, drive_path=str(snap_path))
