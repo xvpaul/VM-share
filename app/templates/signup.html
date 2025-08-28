@@ -11,12 +11,16 @@
 </head>
 <body class="h-full bg-black text-white">
   <main class="flex min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl">      <!-- Tabs -->
-      <div class="mb-6 grid grid-cols-2 rounded-xl border border-white/15 p-1 text-sm" role="tablist">
-        <button id="tab-signin" role="tab" aria-selected="true" aria-controls="panel-signin" class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black" data-active="true">Sign in</button>
-        <button id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup" class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black">Sign up</button>
-      </div>
+    <div class="w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl">
 
+      <!-- Tabs -->
+      <div class="mb-6 grid grid-cols-2 rounded-xl border border-white/15 p-1 text-sm" role="tablist">
+        <button id="tab-signin" role="tab" aria-selected="true" aria-controls="panel-signin"
+          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black"
+          data-active="true">Sign in</button>
+        <button id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup"
+          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black">Sign up</button>
+      </div>
 
       <div class="my-4 flex items-center gap-3">
         <div class="h-px flex-1 bg-white/10"></div>
@@ -24,43 +28,77 @@
         <div class="h-px flex-1 bg-white/10"></div>
       </div>
 
-    <!-- Sign In -->
-<div id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" class="grid gap-4">
-  <form class="grid gap-4" id="signin-form">
-    <!-- your inputs ... -->
-    <div id="recaptcha-signin" class="mt-1"></div>
-    <button type="submit" class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">Sign in</button>
-  </form>
-</div>
+      <!-- Sign In -->
+      <div id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" class="grid gap-4">
+        <form class="grid gap-4" id="signin-form">
+          <div class="grid gap-2">
+            <label for="login" class="text-sm">Login</label>
+            <input id="login" name="login" type="text"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="password" class="text-sm">Password</label>
+            <input id="password" name="password" type="password"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
 
-<!-- Sign Up -->
-<div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" class="hidden grid gap-4">
-  <form class="grid gap-4" id="signup-form">
-    <!-- your inputs ... -->
-    <div id="recaptcha-signup" class="mt-1"></div>
-    <button type="submit" class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">Create account</button>
-  </form>
-</div>
+          <div id="recaptcha-signin" class="mt-1"></div>
 
-<script>
-  // Render widgets explicitly so we get widget IDs
-  let widgetSignin = null;
-  let widgetSignup = null;
+          <button type="submit"
+            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">
+            Sign in
+          </button>
+        </form>
+      </div>
 
-  window.onRecaptchaLoad = function () {
-    widgetSignin = grecaptcha.render("recaptcha-signin", {
-      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-      theme: "dark" // looks nicer on your dark UI (optional)
-    });
-    widgetSignup = grecaptcha.render("recaptcha-signup", {
-      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-      theme: "dark"
-    });
-  };
-</script>
-<script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
+      <!-- Sign Up -->
+      <div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" class="hidden grid gap-4">
+        <form class="grid gap-4" id="signup-form">
+          <div class="grid gap-2">
+            <label for="login-signup" class="text-sm">Login</label>
+            <input id="login-signup" name="login" type="text"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="password2" class="text-sm">Password</label>
+            <input id="password2" name="password" type="password"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
+          <div class="grid gap-2">
+            <label for="confirm" class="text-sm">Confirm password</label>
+            <input id="confirm" name="confirm" type="password"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+          </div>
 
+          <div id="recaptcha-signup" class="mt-1"></div>
+
+          <button type="submit"
+            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">
+            Create account
+          </button>
+        </form>
+      </div>
+
+    </div>
   </main>
+
+  <script>
+    // Render widgets explicitly so we get widget IDs
+    let widgetSignin = null;
+    let widgetSignup = null;
+
+    window.onRecaptchaLoad = function () {
+      widgetSignin = grecaptcha.render("recaptcha-signin", {
+        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+        theme: "dark"
+      });
+      widgetSignup = grecaptcha.render("recaptcha-signup", {
+        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+        theme: "dark"
+      });
+    };
+  </script>
+  <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
 
   <script type="module" src="static/scripts/signup.js"></script>
 </body>
