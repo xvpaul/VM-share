@@ -2,8 +2,9 @@
 import secrets, logging, subprocess, json, socket, os
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,11 @@ def parse_snapshot_name(name: str):
     user_id, os_type, vmid = parts
     return user_id, os_type, vmid
 
+def _novnc_redirect(req: Request, ws_path: str) -> str:
+    scheme = req.headers.get("x-forwarded-proto") or req.url.scheme
+    host   = req.headers.get("x-forwarded-host")  or req.headers.get("host") or req.url.netloc
+    return f"{scheme}://{host}/novnc/vnc.html?autoconnect=1&path={quote(ws_path, safe='/')}"
+
 class RunScriptRequest(BaseModel):
     os_type: str
     snapshot: str | None = None  # optional, used by /run_snaphot
@@ -51,7 +57,8 @@ class RemoveSnapshotRequest(BaseModel):
 
 @router.post("/run-script")
 async def run_vm_script(
-    request: RunScriptRequest,
+    payload: RunScriptRequest,                 # was: request: RunScriptRequest
+    req: Request,                              # NEW: build same-origin redirect
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
@@ -59,16 +66,16 @@ async def run_vm_script(
     try:
         user_id = str(user.id)
         vmid = secrets.token_hex(6)
-        os_type = request.os_type
-        # todo group-policy
+        os_type = payload.os_type
+
+        # One VM per user
         existing = store.get_running_by_user(user_id)
-        # print(existing)
         if existing is not None:
             logger.info(f"[run_vm_script] User {user_id} already has VM {existing['vmid']}")
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": _novnc_redirect(req, f"ws/{existing['http_port']}"),
             })
 
         logger.info(f"[run_vm_script] Launch requested by {user.login} (id={user_id}); vmid={vmid}")
@@ -77,16 +84,11 @@ async def run_vm_script(
         overlay_path = manager.create_overlay()
         logger.info(f"[run_vm_script] Overlay ready at {overlay_path}")
 
-        meta = manager.boot_vm(vmid)  # should return at least {"vnc_socket": "..."} or {"vnc_host": "...", "vnc_port": ...}
+        meta = manager.boot_vm(vmid)  # returns vnc_socket or vnc_host+vnc_port (+ pid)
         logger.info(f"[run_vm_script] VM booted (vmid={vmid})")
 
-        # Pick target for websockify based on meta format
-        if "vnc_socket" in meta:
-            target = meta["vnc_socket"]                    # unix socket path
-        else:
-            target = f"{meta['vnc_host']}:{meta['vnc_port']}"  # host:port
-
-        http_port = ws.start(vmid, target)  # starts websockify; returns public port
+        target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
+        http_port = ws.start(vmid, target)
         logger.info(f"[run_vm_script] Websockify on :{http_port} for VM {vmid}")
 
         store.set(vmid, {
@@ -94,23 +96,23 @@ async def run_vm_script(
             "user_id": user_id,
             "http_port": http_port,
             "os_type": os_type,
-            #!!! PID additition !!!
-            "pid": meta['pid']
+            "pid": meta['pid'],
         })
 
-        response = {
+        return JSONResponse({
             "message": f"VM for user {user.login} launched (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
-        }
-        return JSONResponse(response)
+            "redirect": _novnc_redirect(req, f"ws/{http_port}"),
+        })
 
     except Exception as e:
         logger.exception(f"[run_vm_script] Failed for user {user.login} (id={user.id}): {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/run-iso")
 async def run_custom_iso(
+    req: Request,                              # NEW: build same-origin redirect
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
@@ -125,13 +127,12 @@ async def run_custom_iso(
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html"
-                            f"?host={server.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": _novnc_redirect(req, f"ws/{existing['http_port']}"),
             })
 
-        # ---- FIXED: build ISO path correctly ----
+        # ---- ISO path resolution (unchanged logic) ----
         prof = VM_PROFILES["custom"]
-        base = Path(prof["base_image"])            # may be dir, file, or template with {uid}
+        base = Path(prof["base_image"])            # dir, file, or template with {uid}
         prefix = str(prof.get("prefix", "{uid}.iso"))
 
         if "{uid}" in str(base):
@@ -139,7 +140,6 @@ async def run_custom_iso(
         elif base.suffix.lower() == ".iso":
             iso_path = base
         else:
-            # treat as directory + prefix-based filename
             name = prefix.format(uid=user_id)
             if not name.lower().endswith(".iso"):
                 name += ".iso"
@@ -147,14 +147,14 @@ async def run_custom_iso(
 
         iso_path = iso_path.expanduser()
 
-        # Validate: must exist, be a file, and not be trivially small
+        # Validate ISO
         if not iso_path.exists():
             raise FileNotFoundError(f"No ISO found at {iso_path}")
         if iso_path.is_dir():
             raise FileNotFoundError(f"Expected an ISO file but got a directory: {iso_path}")
 
         size = iso_path.stat().st_size
-        MIN_BYTES = 1 * 1024 * 1024  # 1 MiB safety floor; adjust to your policy
+        MIN_BYTES = 1 * 1024 * 1024  # 1 MiB floor
         if size < MIN_BYTES:
             raise RuntimeError(f"ISO too small ({size} bytes): {iso_path}")
 
@@ -168,13 +168,18 @@ async def run_custom_iso(
         target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
         http_port = ws.start(vmid, target)
 
-        store.set(vmid, {**meta, "user_id": user_id, "http_port": http_port, "os_type": "custom", "pid": meta["pid"]})
+        store.set(vmid, {
+            **meta,
+            "user_id": user_id,
+            "http_port": http_port,
+            "os_type": "custom",
+            "pid": meta["pid"],
+        })
 
         return JSONResponse({
             "message": f"Custom ISO VM for {user.login} launched (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html"
-                        f"?host={server.SERVER_HOST}&port={http_port}",
+            "redirect": _novnc_redirect(req, f"ws/{http_port}"),
         })
 
     except FileNotFoundError as e:
@@ -183,6 +188,7 @@ async def run_custom_iso(
     except Exception as e:
         logger.exception(f"[run_custom_iso] Failed for {user.login}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 def _bytes_to_mb(n: int) -> int:
     return (int(n) + (1024*1024 - 1)) // (1024*1024)
@@ -310,63 +316,68 @@ async def create_snapshot(
         logger.exception("[snapshot] unexpected user=%s vmid=%s", user.id, vmid)
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
-# remove later
+
 @router.post("/run_snapshot")
 async def run_snapshot(
-    request: RunScriptRequest,
+    payload: RunScriptRequest,                 # carries .snapshot
+    req: Request,                              # used to build same-origin redirect
     user: User = Depends(get_current_user),
     store: SessionStore = Depends(get_session_store),
     ws: WebsockifyService = Depends(get_websockify_service),
 ):
     try:
-        snap_name = request.snapshot
-        user_id, os_type, vmid = parse_snapshot_name(snap_name)
-        logger.info(f"[run_snapshot] {snap_name}")
+        snap_name = (payload.snapshot or "").strip()
         if not snap_name:
             raise HTTPException(status_code=400, detail="Missing snapshot")
-        
+
+        # Parse "<userId>__<os_type>__<vmid>.qcow2"
+        user_id, os_type, vmid = parse_snapshot_name(snap_name)
+        logger.info(f"[run_snapshot] {snap_name} parsed -> uid={user_id} os={os_type} vmid={vmid}")
+
+        # One VM per user
         existing = store.get_running_by_user(user_id)
         if existing is not None:
             logger.info(f"[run_snapshot] User {user_id} already has VM {existing['vmid']}")
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={existing['http_port']}"
+                "redirect": _novnc_redirect(req, f"ws/{existing['http_port']}"),
             })
 
-        logger.info(f"[run_snapshot] Launch from snapshot requested by {user.login} (id={user_id}); vmid={vmid}; snap={snap_name}")
-
-        # Resolve snapshot path (accept absolute or basename)
+        # Resolve snapshot path (accept absolute or look up in SNAPSHOTS_PATH)
         snap_path = Path(snap_name)
         if not snap_path.is_absolute():
             snap_path = Path(SNAPSHOTS_PATH) / snap_path.name
         if not snap_path.exists():
             raise HTTPException(status_code=404, detail=f"Snapshot not found: {snap_path}")
 
-        manager = QemuOverlayManager(user_id, vmid, os_type)
-        # overlay_path = manager.create_overlay()
+        logger.info(f"[run_snapshot] Launch from snapshot requested by {user.login} "
+                    f"(uid={user_id}); vmid={vmid}; snap={snap_path}")
 
-        # Boot directly from the snapshot image
+        # Boot directly from snapshot image (no overlay)
+        manager = QemuOverlayManager(user_id=user_id, vmid=vmid, os_type=os_type)
         meta = manager.boot_vm(vmid, drive_path=str(snap_path))
-        logger.info(f"[run_snapshot] VM booted from snapshot (vmid={vmid})")
+        logger.info(f"[run_snapshot] VM booted from snapshot (vmid={vmid}) meta={meta}")
 
-        # Target for websockify
-        target = meta["vnc_socket"] if "vnc_socket" in meta else f"{meta['vnc_host']}:{meta['vnc_port']}"
+        # Start websockify for the VM's VNC target
+        target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
         http_port = ws.start(vmid, target)
         logger.info(f"[run_snapshot] Websockify on :{http_port} for VM {vmid}")
 
+        # Persist session
         store.set(vmid, {
             **meta,
             "user_id": user_id,
             "http_port": http_port,
             "os_type": os_type,
-            "pid": meta['pid'],
+            "pid": meta["pid"],
         })
 
+        # Same-origin redirect for noVNC (Cloudflare-safe)
         return JSONResponse({
             "message": f"VM for user {user.login} launched from snapshot (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": f"http://{server.SERVER_HOST}:8000/novnc/vnc.html?host={server.SERVER_HOST}&port={http_port}",
+            "redirect": _novnc_redirect(req, f"ws/{http_port}"),
         })
 
     except HTTPException:
@@ -374,7 +385,7 @@ async def run_snapshot(
     except Exception as e:
         logger.exception(f"[run_snapshot] Failed for user {user.login} (id={user.id}): {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
 
 @router.get("/get_user_snapshots")
 async def get_user_snapshots(user: User = Depends(get_current_user)):
