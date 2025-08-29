@@ -23,10 +23,10 @@ logoutBtn?.addEventListener('click', async () => {
       headers: { 'Accept': 'application/json' }
     });
     // Regardless of response, bounce the user to your main page
-    window.location.href = 'http://5.101.67.252:8000/';
+    window.location.href = 'https://vmshare.ru/';
   } catch (e) {
     // Network hiccup — still try to navigate away
-    window.location.href = 'http://5.101.67.252:8000/';
+    window.location.href = 'https://vmshare.ru/';
   } finally {
     logoutBtn.disabled = false;
   }
