@@ -15,10 +15,6 @@ from methods.manager.SessionManager import get_session_store, SessionStore
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 5 GiB cap by default (tune as you like)
-MAX_ISO_BYTES = 5 * 1024 * 1024 * 1024
-CHUNK_SIZE = 1024 * 1024  # 1 MiB
-
 async def _save_stream_with_limit(src: UploadFile, dest: Path, max_bytes: int) -> int:
     """Stream-save UploadFile to dest with a hard size cap."""
     logger.info("post.py: [_save_stream_with_limit] Uploading ISO user")
