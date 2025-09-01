@@ -21,6 +21,7 @@ CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
 async def _save_stream_with_limit(src: UploadFile, dest: Path, max_bytes: int) -> int:
     """Stream-save UploadFile to dest with a hard size cap."""
+    logger.info("post.py: [_save_stream_with_limit] Uploading ISO user")
     total = 0
     # ensure clean target file
     if dest.exists():
@@ -43,8 +44,8 @@ async def _save_stream_with_limit(src: UploadFile, dest: Path, max_bytes: int) -
 @router.post("/api/post")
 async def send_post(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    store: SessionStore = Depends(get_session_store),
+    # db: Session = Depends(get_db),
+    # store: SessionStore = Depends(get_session_store),
     file: UploadFile = File(...),  # required; no body text, just the file
 ):
     try:
