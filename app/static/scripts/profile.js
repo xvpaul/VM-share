@@ -178,6 +178,7 @@ tabGrafana?.addEventListener('click', () => activate('grafana'));
 tabProm?.addEventListener('click', () => activate('prom'));
 tabApp?.addEventListener('click', () => { activate('app'); fetchAppMetrics(); });
 activate('app'); // default tab
+
 // --- Grafana integration ---
 const GRAFANA_PROXY = '/grafana/panel.png';
 

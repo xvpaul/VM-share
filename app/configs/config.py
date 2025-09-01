@@ -32,7 +32,7 @@ COOKIE_MAX_AGE = env("COOKIE_MAX_AGE", 604800, cast=int)
 
 # uploads
 MAX_ISO_BYTES = 5 * 1024 * 1024 * 1024  # 5 GiB
-CHUNK_SIZE    = 1024 * 1024             # 1 MiB
+CHUNK_SIZE    = 5 * 1024 * 1024             # 1 MiB
 
 # ---------- VM profiles ----------
 VM_PROFILES = {
