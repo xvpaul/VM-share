@@ -31,7 +31,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = env("ACCESS_TOKEN_EXPIRE_MINUTES", 30, cast=int)
 COOKIE_MAX_AGE = env("COOKIE_MAX_AGE", 604800, cast=int)
 
 # uploads
-MAX_ISO_BYTES = 10 * 1024 * 1024 * 1024  # 5 GiB
+MAX_ISO_BYTES = 100 * 1024 * 1024 * 1024  # 5 GiB
 CHUNK_SIZE    = 5 * 1024 * 1024             # 1 MiB
 
 # ---------- VM profiles ----------
