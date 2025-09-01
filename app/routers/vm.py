@@ -1,5 +1,5 @@
 # /app/routers/vm.py
-import secrets, logging, subprocess, json, socket, os
+import secrets, logging, socket, os, time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -22,6 +22,20 @@ from methods.manager.WebsockifyService import WebsockifyService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def _wait_listen(host: str, port: int, timeout: float = 10.0, step: float = 0.05):
+    """Block until (host, port) accepts TCP; raise if not ready in time."""
+    deadline = time.time() + timeout
+    last_err = None
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, int(port)), timeout=0.5):
+                return
+        except OSError as e:
+            last_err = e
+            time.sleep(step)
+    raise RuntimeError(f"websockify not listening on {host}:{port} after {timeout}s ({last_err})")
+
 
 def parse_snapshot_name(name: str):
     """
@@ -127,7 +141,7 @@ async def run_custom_iso(
             return JSONResponse({
                 "message": f"VM already running for user {user.login}",
                 "vm": existing,
-                "redirect": _novnc_redirect(req, f"ws/{existing['http_port']}"),
+                "redirect": _novnc_redirect(req, f"ws/{existing['http_port']}") + "&reconnect=1&reconnect_delay=1500",
             })
 
         # ---- ISO path resolution (unchanged logic) ----
@@ -168,6 +182,10 @@ async def run_custom_iso(
         target = meta.get("vnc_socket") or f"{meta['vnc_host']}:{meta['vnc_port']}"
         http_port = ws.start(vmid, target)
 
+        # *** wait until websockify is actually listening to avoid race ***
+        _wait_listen("127.0.0.1", int(http_port))
+        logger.info(f"[run_custom_iso] websockify ready on 127.0.0.1:{http_port}")
+
         store.set(vmid, {
             **meta,
             "user_id": user_id,
@@ -176,10 +194,13 @@ async def run_custom_iso(
             "pid": meta["pid"],
         })
 
+        # auto-reconnect helps even if the very first attempt races by milliseconds
+        redirect_url = _novnc_redirect(req, f"ws/{http_port}") + "&reconnect=1&reconnect_delay=1500"
+
         return JSONResponse({
             "message": f"Custom ISO VM for {user.login} launched (vmid={vmid})",
             "vm": {"vmid": vmid, **meta},
-            "redirect": _novnc_redirect(req, f"ws/{http_port}"),
+            "redirect": redirect_url,
         })
 
     except FileNotFoundError as e:
