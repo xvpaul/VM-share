@@ -185,7 +185,7 @@ const GRAFANA_PROXY = '/grafana/panel.png';
 // --- Grafana integration (iframes, no Chromium) ---
 
 // Reverse-proxied Grafana base (adjust if yours differs)
-const GRAFANA_BASE = '/grafana';
+const GRAFANA_BASE = 'https://grafana.example.com';
 
 // Panels to show (dashboard UID + panelId + title)
 const GRAFANA_PANELS = [
