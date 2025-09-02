@@ -24,7 +24,7 @@ INTERVAL   = 5         # seconds between checks
 
 # Alert when these devices have ≤ given GiB free (device -> GiB)
 DISK_FREE_THRESHOLDS_GIB = {
-    "/dev/vda2": 45,   # root disk on your host
+    "/dev/vda2": 35,   # root disk on your host
 }
 
 # ---- Helpers ----
