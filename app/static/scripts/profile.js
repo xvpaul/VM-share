@@ -185,23 +185,23 @@ activate('app'); // default tab
 const GRAFANA_IFRAMES = [
   {
     title: 'Request rate (rps, 1m)',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=4&theme=dark&kiosk'
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=4&theme=dark&kiosk&refresh=30s'
   },
   {
     title: 'User-count',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=2&theme=dark&kiosk'
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=2&theme=dark&kiosk&refresh=30s'
   },
   {
-    title: 'Active-sessions (3h)',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-3h&to=now&timezone=browser&panelId=1&theme=dark&kiosk'
+    title: 'Active-sessions (12h)',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=1&theme=dark&kiosk&refresh=30s'
   },
   {
-    title: 'Custom panel 7',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=7&theme=dark&kiosk'
+    title: 'CPU',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=7&theme=dark&kiosk&refresh=30s'
   },
   {
-    title: 'Custom panel 5',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=5&theme=dark&kiosk'
+    title: 'RAM',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=5&theme=dark&kiosk&refresh=30s'
   }
 ];
 
