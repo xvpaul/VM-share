@@ -183,20 +183,14 @@ activate('app'); // default tab
 const GRAFANA_PROXY = '/grafana/panel.png';
 // --- Grafana IFRAMES (fixed: no redirect spam) ---
 const GRAFANA_BASE = '/grafana';
+const SLUG = 'system-metrics'; // <-- real slug from your dashboard URL
 
-function urlFor({ uid, panelId, from = 'now-1h', to = 'now' }) {
-  // Build query by hand so `kiosk` is presence-only (no "=")
-  const params = new URLSearchParams({
-    orgId: '1',
-    panelId: String(panelId),
-    from,
-    to,
-    theme: 'dark',
-  });
-  // presence-only flag to avoid kiosk= which can trigger canonical redirects
-  const qs = params.toString() + '&kiosk';
-  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/view?${qs}`;
+function urlFor({ uid, panelId, from='now-1h', to='now' }) {
+  const p = new URLSearchParams({ orgId:'1', panelId:String(panelId), from, to, theme:'dark' });
+  const qs = p.toString() + '&kiosk';  // presence-only
+  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/${encodeURIComponent(SLUG)}?${qs}`;
 }
+
 
 const GRAFANA_PANELS = [
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 4, title: 'Request rate (rps, 1m)' },
