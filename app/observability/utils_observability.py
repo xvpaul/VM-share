@@ -17,14 +17,14 @@ except Exception as _e:
         logger.error("telegram_reporting not available; message was: %s", message)
 
 # ---- Thresholds ----
-CPU_THRESH = 1        # %
-RAM_THRESH = 3        # %
-SUSTAINED  = 10        # seconds the condition must hold
+CPU_THRESH = 80        # %
+RAM_THRESH = 80       # %
+SUSTAINED  = 30        # seconds the condition must hold
 INTERVAL   = 5         # seconds between checks
 
 # Alert when these devices have ≤ given GiB free (device -> GiB)
 DISK_FREE_THRESHOLDS_GIB = {
-    "/dev/vda2": 45,   # root disk on your host
+    "/dev/vda2": 35,   # root disk on your host
 }
 
 # ---- Helpers ----
