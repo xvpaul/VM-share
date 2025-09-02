@@ -181,41 +181,36 @@ activate('app'); // default tab
 
 // --- Grafana integration ---
 const GRAFANA_PROXY = '/grafana/panel.png';
-// --- Grafana integration via IFRAMES (no PNG rendering) ---
-
-// Use your subpath proxy:
+// --- Grafana IFRAMES (fixed: no redirect spam) ---
 const GRAFANA_BASE = '/grafana';
 
-// Panels you want to show
+function urlFor({ uid, panelId, from = 'now-1h', to = 'now' }) {
+  // Build query by hand so `kiosk` is presence-only (no "=")
+  const params = new URLSearchParams({
+    orgId: '1',
+    panelId: String(panelId),
+    from,
+    to,
+    theme: 'dark',
+  });
+  // presence-only flag to avoid kiosk= which can trigger canonical redirects
+  const qs = params.toString() + '&kiosk';
+  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/view?${qs}`;
+}
+
 const GRAFANA_PANELS = [
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 4, title: 'Request rate (rps, 1m)' },
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 2, title: 'User-count' },
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 1, title: 'Active-sessions (3h)' },
 ];
 
-// Build the FULL iframe URL. Important: includes /d-solo/<uid>/<slug>
-function urlFor({ uid, panelId, from = 'now-1h', to = 'now' }) {
-  const params = new URLSearchParams({
-    orgId: '1',
-    panelId: String(panelId),
-    from,
-    to,
-    refresh: '10s',
-    theme: 'dark',
-    kiosk: '', // presence-only
-  });
-  // slug can be any word; 'view' is fine
-  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/view?${params.toString()}`;
-}
-
-// Create a card with an IFRAME (not <img>)
-function makeCard(title, src, rangeText = 'now-1h → now') {
+function makeCard(title, src) {
   const card = document.createElement('div');
   card.className = 'bg-white/5 rounded-xl p-3 shadow';
   card.innerHTML = `
     <div class="flex items-center justify-between mb-2">
       <h4 class="font-medium">${title}</h4>
-      <span class="text-xs text-neutral-300">${rangeText}</span>
+      <span class="text-xs text-neutral-300">now-1h → now</span>
     </div>
     <div class="w-full aspect-[16/9]">
       <iframe class="w-full h-full rounded-md border-0" loading="lazy" referrerpolicy="no-referrer"></iframe>
@@ -231,16 +226,9 @@ async function loadGrafanaPanels() {
   const grid = document.createElement('div');
   grid.className = 'grid grid-cols-1 gap-4';
   paneGrafana.appendChild(grid);
-
-  GRAFANA_PANELS.forEach(p => {
-    const src = urlFor(p);
-    // quick debug: ensure it starts with /grafana/d-solo/
-    // console.log('IFRAME SRC:', src);
-    grid.appendChild(makeCard(p.title, src));
-  });
+  GRAFANA_PANELS.forEach(p => grid.appendChild(makeCard(p.title, urlFor(p))));
 }
 
-// Hook to your existing tab
 tabGrafana?.addEventListener('click', () => { activate('grafana'); loadGrafanaPanels(); });
 
 
