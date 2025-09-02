@@ -121,88 +121,178 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =====================
-  // Auth & VM (unchanged auth, but VM uses delegation)
-  // =====================
-  // ===== Auth header (no modal, separate auth page) =====
-  const authBtn   = document.getElementById("auth-btn");
-  const logoutBtn = document.getElementById("logout-btn"); // legacy; we'll hide it
+// Auth & VM (unchanged auth, but VM uses delegation)
+// =====================
+// ===== Auth header (no modal, separate auth page) =====
+const authBtn   = document.getElementById("auth-btn");
+const logoutBtn = document.getElementById("logout-btn"); // legacy; we'll hide it
 
-  initHeaderAuth();
+initHeaderAuth();
 
-  async function initHeaderAuth() {
-    if (!authBtn) return; // header not present
+async function initHeaderAuth() {
+  if (!authBtn) return; // header not present
 
-    const authed = await isAuthenticated();
+  const authed = await isAuthenticated();
 
-    if (!authed) {
-      // Show simple redirect button
-      authBtn.classList.remove("hidden");
-      authBtn.textContent = "Log in / Sign Up";
-      authBtn.onclick = () => { window.location.href = "/signup"; };
-      logoutBtn?.classList.add("hidden");
-      // remove any stale menu from previous state
-      removeUserMenu();
-    } else {
-      // Hide old buttons and render burger menu
-      authBtn.classList.add("hidden");
-      logoutBtn?.classList.add("hidden");
-      renderUserMenu(authBtn.parentElement);
-    }
-  }
-
-  async function isAuthenticated() {
-    try {
-      const r = await fetch("/auth/me", { credentials: "include" });
-      return r.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  function removeUserMenu() {
-    const existing = document.getElementById("user-menu-wrap");
-    if (existing) existing.remove();
-  }
-
-  function renderUserMenu(container) {
-    if (!container) return;
+  if (!authed) {
+    // Show simple redirect button
+    authBtn.classList.remove("hidden");
+    authBtn.textContent = "Log in / Sign Up";
+    authBtn.onclick = () => { window.location.href = "/signup"; };
+    logoutBtn?.classList.add("hidden");
+    // remove any stale menu from previous state
     removeUserMenu();
+  } else {
+    // Hide old buttons and render burger menu
+    authBtn.classList.add("hidden");
+    logoutBtn?.classList.add("hidden");
+    renderUserMenu(authBtn.parentElement);
+  }
+}
 
-    const wrap = document.createElement("div");
-    wrap.id = "user-menu-wrap";
-    wrap.className = "relative ml-4";
+async function isAuthenticated() {
+  try {
+    const r = await fetch("/auth/me", { credentials: "include" });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 
-    wrap.innerHTML = `
+function removeUserMenu() {
+  const existing = document.getElementById("user-menu-wrap");
+  if (existing) existing.remove();
+}
+
+// ---------- Feedback modal (built once, only for authed users) ----------
+function ensureFeedbackModal() {
+  if (document.getElementById("feedback-modal")) return;
+
+  const modal = document.createElement("div");
+  modal.id = "feedback-modal";
+  modal.className = "fixed inset-0 z-50 hidden";
+  modal.innerHTML = `
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="feedback-overlay"></div>
+    <div class="relative h-full w-full flex items-end sm:items-center justify-center p-4">
+      <div class="w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 shadow-xl p-4 sm:p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xl font-semibold">Send feedback</h3>
+          <button id="feedback-close" class="rounded-md px-2 py-1 text-white/70 hover:text-white" aria-label="Close">&times;</button>
+        </div>
+
+        <label for="feedback-text" class="sr-only">Your feedback</label>
+        <textarea id="feedback-text" rows="5" placeholder="Tell us what worked, what was confusing, bugs…"
+          class="w-full rounded-xl border border-white/15 bg-neutral-950/90 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-white/20"></textarea>
+
+        <div class="mt-2 flex items-center justify-between text-xs text-white/50">
+          <span id="feedback-status"></span>
+          <span id="feedback-count-wrap"><span id="feedback-count">0</span>/1000</span>
+        </div>
+
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button id="feedback-cancel" class="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15">Cancel</button>
+          <button id="feedback-send" class="rounded-xl px-4 py-2 bg-white text-black font-semibold hover:bg-white/90 disabled:opacity-60 disabled:cursor-not-allowed">Send</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const overlay   = modal.querySelector("#feedback-overlay");
+  const closeBtn  = modal.querySelector("#feedback-close");
+  const cancelBtn = modal.querySelector("#feedback-cancel");
+  const sendBtn   = modal.querySelector("#feedback-send");
+  const ta        = modal.querySelector("#feedback-text");
+  const statusEl  = modal.querySelector("#feedback-status");
+  const countEl   = modal.querySelector("#feedback-count");
+  const countWrap = modal.querySelector("#feedback-count-wrap");
+
+  function updateCount() {
+    const len = ta.value.length;
+    countEl.textContent = len;
+    if (len > 1000) {
+      countWrap.classList.add("text-red-400");
+    } else {
+      countWrap.classList.remove("text-red-400");
+    }
+  }
+
+  function openFeedbackModal() {
+    modal.classList.remove("hidden");
+    setTimeout(() => { try { ta.focus({ preventScroll: true }); } catch { ta.focus(); } }, 50);
+  }
+  function closeFeedbackModal() {
+    modal.classList.add("hidden");
+    ta.value = "";
+    statusEl.textContent = "";
+    updateCount();
+  }
+
+  // expose open for menu click
+  window.openFeedbackModal = openFeedbackModal;
+
+  // events
+  overlay.addEventListener("click", closeFeedbackModal);
+  closeBtn.addEventListener("click", closeFeedbackModal);
+  cancelBtn.addEventListener("click", closeFeedbackModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) closeFeedbackModal();
+  });
+  ta.addEventListener("input", updateCount);
+  ta.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  sendBtn.addEventListener("click", async () => {
+    const message = ta.value.trim();
+    if (!message) { statusEl.textContent = "Please type your message."; return; }
+    if (message.length > 1000) { statusEl.textContent = "Message too long."; return; }
+    sendBtn.disabled = true;
+    statusEl.textContent = "Sending…";
+    try {
+      const res = await fetch("/feedback", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+      if (res.ok) {
+        statusEl.textContent = "Thanks! Feedback sent.";
+        setTimeout(closeFeedbackModal, 800);
+      } else {
+        const t = await res.text().catch(() => "");
+        statusEl.textContent = t || "Failed to send. Try again.";
+      }
+    } catch {
+      statusEl.textContent = "Network error. Try again.";
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+}
+
+function renderUserMenu(container) {
+  if (!container) return;
+  removeUserMenu();
+
+  const wrap = document.createElement("div");
+  wrap.id = "user-menu-wrap";
+  wrap.className = "relative ml-4";
+
+  wrap.innerHTML = `
   <style>
-    .menu {
-      position: relative;
-      cursor: pointer;
-      width: 30px;
-      height: 22px;
-    }
-    .menu .line {
-      position: absolute;
-      left: 0;
-      width: 100%;
-      height: 3px;
-      background: #ffffff;
-      transform-origin: center;
-      transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
-    }
+    .menu { position: relative; cursor: pointer; width: 30px; height: 22px; }
+    .menu .line { position: absolute; left: 0; width: 100%; height: 3px; background: #ffffff;
+      transform-origin: center; transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease; }
     .menu .line:nth-child(1) { top: 0; }
     .menu .line:nth-child(2) { top: 50%; transform: translateY(-50%); }
     .menu .line:nth-child(3) { bottom: 0; }
-    .menu.open .line:nth-child(2) {
-      transform: translateX(50%);
-      opacity: 0;
-      visibility: hidden;
-    }
-    .menu.open .line:nth-child(1) {
-      transform: translateY(9px) rotate(45deg);
-    }
-    .menu.open .line:nth-child(3) {
-      transform: translateY(-9px) rotate(-45deg);
-    }
+    .menu.open .line:nth-child(2) { transform: translateX(50%); opacity: 0; visibility: hidden; }
+    .menu.open .line:nth-child(1) { transform: translateY(9px) rotate(45deg); }
+    .menu.open .line:nth-child(3) { transform: translateY(-9px) rotate(-45deg); }
   </style>
 
   <button id="user-menu-trigger"
@@ -217,63 +307,78 @@ document.addEventListener("DOMContentLoaded", () => {
     class="absolute right-0 mt-2 w-44 rounded-md bg-neutral-900 ring-1 ring-white/10 shadow-lg hidden"
     role="menu" aria-labelledby="user-menu-trigger">
     <a href="/profile" class="block px-4 py-2 hover:bg-white/10" role="menuitem">Profile</a>
+    <button id="feedback-menu" class="w-full text-left block px-4 py-2 hover:bg-white/10" role="menuitem">
+      Feedback
+    </button>
     <button id="logout-menu" class="w-full text-left block px-4 py-2 hover:bg-white/10" role="menuitem">
       Log out
     </button>
   </div>
 `;
 
-    container.appendChild(wrap);
+  container.appendChild(wrap);
 
-    const trigger = wrap.querySelector("#user-menu-trigger");
-    const menu    = wrap.querySelector("#user-menu");
-    const logout  = wrap.querySelector("#logout-menu");
+  const trigger   = wrap.querySelector("#user-menu-trigger");
+  const menu      = wrap.querySelector("#user-menu");
+  const logout    = wrap.querySelector("#logout-menu");
+  const feedback  = wrap.querySelector("#feedback-menu");
 
-    // Toggle menu
-    trigger.addEventListener("click", () => {
-      menu.classList.toggle("hidden");
-      trigger.classList.toggle("open"); // animate burger ↔ X
-      trigger.setAttribute("aria-expanded", menu.classList.contains("hidden") ? "false" : "true");
-    });
+  // Toggle menu
+  trigger.addEventListener("click", () => {
+    menu.classList.toggle("hidden");
+    trigger.classList.toggle("open"); // animate burger ↔ X
+    trigger.setAttribute("aria-expanded", menu.classList.contains("hidden") ? "false" : "true");
+  });
 
-    // Close on outside click / ESC
-    document.addEventListener("click", (e) => {
-      if (!wrap.contains(e.target)) {
-        menu.classList.add("hidden");
-        trigger.classList.remove("open");
-        trigger.setAttribute("aria-expanded", "false");
-      }
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        menu.classList.add("hidden");
-        trigger.classList.remove("open");
-        trigger.setAttribute("aria-expanded", "false");
-      }
-    });
-
-    // Logout action
-    logout.addEventListener("click", async () => {
-      try { await fetch("/auth/logout", { method: "POST", credentials: "include" }); }
-      catch {}
-      initHeaderAuth();
-    });
-  }
-
-  // =====================
-  // Signup redirect setup for VM actions
-  // =====================
-  const SIGNUP_URL = "/signup"; // redirect target for unauthenticated VM clicks
-
-  // Helper: check auth and redirect if needed
-  async function ensureAuthOrRedirect() {
-    const authed = await isAuthenticated();
-    if (!authed) {
-      window.location.href = SIGNUP_URL;
-      return false;
+  // Close on outside click / ESC
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) {
+      menu.classList.add("hidden");
+      trigger.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
     }
-    return true;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      menu.classList.add("hidden");
+      trigger.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  // Feedback action
+  feedback.addEventListener("click", async () => {
+    // close the menu first
+    menu.classList.add("hidden");
+    trigger.classList.remove("open");
+    trigger.setAttribute("aria-expanded", "false");
+    // build & open the modal
+    ensureFeedbackModal();
+    window.openFeedbackModal();
+  });
+
+  // Logout action
+  logout.addEventListener("click", async () => {
+    try { await fetch("/auth/logout", { method: "POST", credentials: "include" }); }
+    catch {}
+    initHeaderAuth();
+  });
+}
+
+// =====================
+// Signup redirect setup for VM actions
+// =====================
+const SIGNUP_URL = "/signup"; // redirect target for unauthenticated VM clicks
+
+// Helper: check auth and redirect if needed
+async function ensureAuthOrRedirect() {
+  const authed = await isAuthenticated();
+  if (!authed) {
+    window.location.href = SIGNUP_URL;
+    return false;
   }
+  return true;
+}
 
   // =====================
   // VM launch — EVENT DELEGATION (works for clones)

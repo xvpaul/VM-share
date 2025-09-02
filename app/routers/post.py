@@ -111,3 +111,12 @@ async def send_post(
     except Exception as e:
         logger.exception("post.py: [send_post] Failed to save ISO: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/api/post")
+async def send_post(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    store: SessionStore = Depends(get_session_store),
+    text: Text = Text(...)
+): ...
