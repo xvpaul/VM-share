@@ -2,286 +2,361 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Loading OS…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>noVNC – Mobile Friendly</title>
   <style>
     :root {
-      --bg: #0b0e13;
-      --panel: #0f141c;
-      --panel-2: #0c1017;
-      --fg: #e8eaed;
-      --muted: #99a2ad;
-      --border: #1f2632;
-      --accent: #4f46e5; /* indigo-600 */
-      --accent-2: #22d3ee; /* cyan-400 */
-      --ok: #22c55e;      /* green-500 */
-      --warn: #f59e0b;    /* amber-500 */
-      --danger: #ef4444;  /* red-500 */
+      --bg: #0b0f14;
+      --fg: #e6edf3;
+      --muted: #9aa4ae;
+      --accent: #5aa3ff;
+      --danger: #ff6262;
+      --card: #121820;
+      --card2: #0f141b;
     }
-    html, body { height:100%; margin:0; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
-                                          radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
-                                          var(--bg);
-      color:var(--fg); font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+
     /* Layout */
-    body { display:grid; grid-template-rows: auto auto 1fr; min-height: 100svh; }
-    .bar { height:56px; display:flex; align-items:center; gap:12px; padding:0 16px; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-      border-bottom:1px solid var(--border); backdrop-filter: blur(6px); position: sticky; top:0; z-index:10; }
-    .brand { display:flex; align-items:center; gap:10px; }
-    .logo { width:28px; height:28px; border-radius:8px; background: conic-gradient(from 210deg, var(--accent), var(--accent-2)); box-shadow: 0 0 0 1px #ffffff14 inset, 0 4px 20px #00000080; }
-    .title { font-weight:700; letter-spacing:.1px; font-size:15px; }
-    .subtitle { color:var(--muted); font-weight:500; font-size:12px; }
-    .spacer { flex:1; }
+    .bar { position: fixed; inset-inline: 0; top: env(safe-area-inset-top); display: flex; gap: .5rem; align-items: center; padding: .5rem .75rem; background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.0)); z-index: 10; }
+    .bar .left, .bar .right { display: flex; gap: .5rem; align-items: center; }
+    .spacer { flex: 1 1 auto; }
 
-    /* Buttons */
-    .btn { border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
-      border-radius:12px; padding:8px 12px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:8px; transition:transform .08s ease, border-color .2s ease, background .2s ease; }
-    .btn:hover { border-color:#2a3547; background:linear-gradient(180deg, #172033, #111722); }
-    .btn:active { transform: translateY(1px); }
-    .btn[disabled] { opacity:.6; cursor:not-allowed; }
-    .btn--ghost { background:transparent; }
-    .btn--ok { border-color:#1e7e43; }
-    .btn--danger { border-color:#592327; }
+    .btn { appearance: none; border: 0; border-radius: 14px; padding: .55rem .75rem; background: var(--card); color: var(--fg); font-size: .95rem; display: inline-flex; align-items: center; gap: .4rem; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 0 0 1px rgba(255,255,255,.06) inset, 0 6px 20px rgba(0,0,0,.25); }
+    .btn[aria-pressed="true"] { outline: 2px solid var(--accent); background: var(--card2); }
+    .btn.danger { background: #2b1313; color: #ffdcdc; }
+    .btn:disabled { opacity: .5; }
 
-    /* Icons */
-    .icon { width:16px; height:16px; display:inline-block; }
+    .badge { font-size: .8rem; color: var(--muted); }
 
-    /* Status strip */
-    .status { font-size:12px; color:var(--muted); padding:8px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background: var(--panel-2); }
-    .dot { width:8px; height:8px; border-radius:999px; background:#6b7280; box-shadow:0 0 0 2px #00000055; }
-    .dot.ok { background: var(--ok); }
-    .dot.warn { background: var(--warn); }
-    .dot.err { background: var(--danger); }
+    #screen { position: fixed; inset: calc(env(safe-area-inset-top) + 48px) 0 calc(env(safe-area-inset-bottom) + 56px) 0; /* leave room for bars */ }
+    #target { position: absolute; inset: 0; touch-action: none; background: #000; }
+    canvas { display:block; width:100%; height:100%; }
 
-    /* Screen area */
-    #screen { min-height:0; }
-    #screen > canvas { width:100%; height:calc(100svh - 56px - 34px); display:block; image-rendering: crisp-edges; background:#000; }
+    /* Bottom action row for mobile */
+    .dock { position: fixed; inset-inline: 0; bottom: env(safe-area-inset-bottom); display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: .5rem; padding: .5rem .75rem; background: linear-gradient(0deg, rgba(0,0,0,.4), rgba(0,0,0,0)); z-index: 10; }
 
-    /* Toast */
-    .toast { position:fixed; right:16px; bottom:16px; background:#0b121b; border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px; }
-    .toast .dot { box-shadow:none; }
+    /* Soft keyboard panel */
+    #oskPanel { position: fixed; left: 0; right: 0; bottom: 0; transform: translateY(100%); transition: transform .2s ease; background: var(--card); border-top: 1px solid rgba(255,255,255,.08); padding: .5rem .75rem .75rem; z-index: 30; }
+    #oskPanel.show { transform: translateY(0); }
+    #osk { width: 100%; height: 44px; font-size: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: var(--card2); color: var(--fg); padding: .5rem .75rem; }
+
+    .kbd { display:inline-flex; align-items:center; justify-content:center; min-width:2.2rem; height:2.2rem; border-radius:10px; background:var(--card2); border:1px solid rgba(255,255,255,.1); }
+    .kbd-row { display:flex; gap:.4rem; margin-top:.4rem; }
+
+    @media (min-width: 768px) {
+      .bar, .dock { padding-inline: 1rem; }
+      #osk { height: 36px; }
+    }
   </style>
 </head>
 <body>
-  <div class="bar">
-    <div class="brand" title="noVNC">
-      <div class="logo" aria-hidden="true"></div>
-      <div>
-        <div class="title"><span id="vm-name">Loading…</span></div>
-        <div class="subtitle" id="vm-sub">Remote console</div>
-      </div>
+  <div class="bar" role="toolbar">
+    <div class="left">
+      <button id="connectBtn" class="btn">Connect</button>
+      <button id="disconnectBtn" class="btn danger" disabled>Disconnect</button>
+      <span id="status" class="badge">disconnected</span>
     </div>
     <div class="spacer"></div>
-    <button id="btn-full" class="btn" title="Fullscreen (F)">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
-      Fullscreen
-    </button>
-    <button id="btn-shot" class="btn btn--ok" title="Snapshot VM (/snapshot)">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3"/></svg>
-      Snapshot
-    </button>
-    <button id="btn-disc" class="btn btn--danger" title="Disconnect (/disconnect)">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h13"/><path d="M17 8l4 4-4 4"/></svg>
-      Disconnect
-    </button>
+    <div class="right">
+      <button id="kbdBtn" class="btn" aria-pressed="false" title="Toggle soft keyboard">Keyboard</button>
+      <button id="fsBtn" class="btn" title="Fullscreen">Fullscreen</button>
+    </div>
   </div>
 
-  <div class="status" id="status">
-    <span class="dot" id="dot"></span>
-    <span id="status-text">Connecting…</span>
+  <main id="screen">
+    <!-- This is where noVNC will render the remote framebuffer -->
+    <div id="target" tabindex="-1" aria-label="VNC screen"></div>
+  </main>
+
+  <div class="dock">
+    <button id="cadBtn" class="btn" title="Send Ctrl+Alt+Del">Ctrl+Alt+Del</button>
+    <button id="escBtn" class="btn" title="Send Escape">Esc</button>
+    <button id="altBtn" class="btn" aria-pressed="false" title="Hold Alt">Alt</button>
+    <button id="ctrlBtn" class="btn" aria-pressed="false" title="Hold Ctrl">Ctrl</button>
+    <button id="rightClickBtn" class="btn" title="Right click">Right‑click</button>
   </div>
 
-  <div id="screen"></div>
+  <!-- Soft keyboard panel (uses a real <textarea> to summon the mobile IME) -->
+  <section id="oskPanel" aria-hidden="true">
+    <textarea id="osk" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="Type here…"></textarea>
+    <div class="kbd-row">
+      <button class="kbd" data-key="\r" title="Enter">⏎</button>
+      <button class="kbd" data-key="\b" title="Backspace">⌫</button>
+      <button class="kbd" data-key="\t" title="Tab">⇥</button>
+      <button class="kbd" data-key="\x1b" title="Escape">Esc</button>
+      <button class="kbd" id="arrowLeft" title="Left">←</button>
+      <button class="kbd" id="arrowUp" title="Up">↑</button>
+      <button class="kbd" id="arrowDown" title="Down">↓</button>
+      <button class="kbd" id="arrowRight" title="Right">→</button>
+    </div>
+  </section>
 
-  <div id="toast" class="toast" style="display:none">
-    <span class="dot ok"></span>
-    <span id="toast-text">Done</span>
-  </div>
-
-  <!-- noVNC core library you copied -->
+  <!--
+    IMPORTANT: This file assumes you have a local copy of noVNC. If your directory
+    looks like the standard noVNC repo, keep the import below. Otherwise, adjust
+    the path to rfb.js accordingly (e.g. "./node_modules/@novnc/novnc/core/rfb.js").
+  -->
   <script type="module">
-  import RFB from './core/rfb.js';
+    import RFB from './core/rfb.js';
 
-  // Run after DOM is ready (works whether script is in <head> or end of <body>)
-  const ready = (fn) => {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', fn, { once: true });
-    } else {
-      fn();
-    }
-  };
+    // --- Helpers -----------------------------------------------------------
+    const $ = (sel) => document.querySelector(sel);
+    const qs = (key, def = '') => new URLSearchParams(location.search).get(key) ?? def;
 
-  ready(() => {
-    // ——— Cache elements ———
-    const dotEl        = document.querySelector('#dot');
-    const statusTextEl = document.querySelector('#status-text');
-    const vmNameEl     = document.querySelector('#vm-name');
-    const vmSubEl      = document.querySelector('#vm-sub');
-    const toastEl      = document.querySelector('#toast');
-    const toastTextEl  = document.querySelector('#toast-text');
-    const btnFull      = document.querySelector('#btn-full');
-    const btnDisc      = document.querySelector('#btn-disc');
-    const btnShot      = document.querySelector('#btn-shot');
-    const screen       = document.getElementById('screen');
+    const target = $('#target');
+    const statusEl = $('#status');
+    const connectBtn = $('#connectBtn');
+    const disconnectBtn = $('#disconnectBtn');
+    const kbdBtn = $('#kbdBtn');
+    const fsBtn = $('#fsBtn');
 
-    if (!screen) {
-      console.error('[ui] #screen not found; aborting noVNC init');
-      return;
-    }
+    const oskPanel = $('#oskPanel');
+    const osk = $('#osk');
 
-    // ——— UI helpers ———
-    function setStatus(text, level = 'info') {
-      if (statusTextEl) statusTextEl.textContent = text;
-      if (!dotEl) return;
-      dotEl.classList.remove('ok', 'warn', 'err');
-      if (level === 'ok') dotEl.classList.add('ok');
-      else if (level === 'warn') dotEl.classList.add('warn');
-      else if (level === 'err') dotEl.classList.add('err');
+    const ctrlBtn = $('#ctrlBtn');
+    const altBtn = $('#altBtn');
+
+    let rfb;
+
+    // Track modifier state for simple combos
+    let ctrlHeld = false;
+    let altHeld = false;
+
+    // Build a ws URL from query params, e.g. ?host=localhost&port=6080&path=websockify
+    function buildUrl() {
+      // If the page is already behind a WebSockify path, allow relative path via wsPath
+      let host = qs('host') || location.hostname;
+      let port = qs('port') || location.port || (location.protocol === 'https:' ? '443' : '80');
+      let path = (qs('path') || 'websockify').replace(/^\/+/, '');
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      return `${proto}://${host}:${port}/${path}`;
     }
 
-    let toastTimer;
-    function toast(text, level = 'ok') {
-      if (!toastEl || !toastTextEl) return;
-      toastTextEl.textContent = text;
-      const dot = toastEl.querySelector('.dot');
-      if (dot) dot.className = 'dot ' + (level === 'ok' ? 'ok' : level === 'err' ? 'err' : 'warn');
-      toastEl.style.display = 'flex';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, 2600);
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function connect() {
+      const url = buildUrl();
+      const opts = { shared: true, credentials: { username: qs('username') || '', password: qs('password') || '' } };
+      rfb = new RFB(target, url, opts);
+
+      // Mobile-friendly viewing
+      rfb.viewOnly = false;
+      rfb.clipViewport = true;      // prevent huge desktops from overflowing
+      rfb.scaleViewport = true;     // scale to fit the phone screen
+      rfb.resizeSession = true;     // ask the server to resize to our screen if supported
+
+      rfb.addEventListener('connect', () => { setStatus('connected'); connectBtn.disabled = true; disconnectBtn.disabled = false; });
+      rfb.addEventListener('disconnect', (e) => { setStatus('disconnected'); connectBtn.disabled = false; disconnectBtn.disabled = true; if (e.detail?.clean === false) console.warn('VNC disconnect:', e.detail?.reason); });
+      rfb.addEventListener('credentialsrequired', () => {
+        // If the server requires credentials not supplied in the query, prompt once
+        const password = prompt('VNC Password');
+        rfb.sendCredentials({ password });
+      });
+
+      // Better touch: single-finger = left button drag; two-finger = scroll; tap‑and‑hold = right click
+      installTouchGestures();
+
+      setStatus('connecting…');
     }
 
-    // ——— Dynamic title/OS from /user_info ———
-    let currentOsType = null;
-
-    async function loadOS() {
-      try {
-        const res = await fetch('/auth/user_info', { credentials: 'same-origin' });
-        const ct = res.headers.get('content-type') || '';
-        let os = '';
-        if (ct.includes('application/json')) {
-          const j = await res.json();
-          os = j.os_type;
-        } else {
-          os = (await res.text()).trim();
-        }
-        if (!os) os = 'Virtual Machine';
-        currentOsType = os;
-        document.title = os + ' — Console';
-        if (vmNameEl) vmNameEl.textContent = os;
-        if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
-      } catch {
-        document.title = 'Console';
-        if (vmNameEl) vmNameEl.textContent = 'Console';
-        if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
+    function disconnect() {
+      if (rfb) {
+        rfb.disconnect();
+        rfb = null;
+        setStatus('disconnected');
       }
     }
 
-    // ——— Build websocket URL ———
-    const urlParams = new URLSearchParams(window.location.search);
-    const host  = urlParams.get('host') || window.location.hostname || 'localhost';
-    const port  = urlParams.get('port') || window.location.port || (location.protocol === 'https:' ? '443' : '80');
-    const path  = urlParams.get('path') || 'websockify';
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${host}:${port}/${path}`;
+    // --- Touch + gestures --------------------------------------------------
+    function installTouchGestures() {
+      const el = target;
+      let longPressTimer = null;
+      let rightClickPending = false;
 
-    // ——— Setup RFB ———
-    const rfb = new RFB(screen, wsUrl, { credentials: {} });
-    rfb.viewOnly = false;
-    rfb.scaleViewport = true;
-    rfb.resizeSession = true;
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    rfb.addEventListener('connect',   () => setStatus('Connected', 'ok'));
-    rfb.addEventListener('disconnect', (e) => {
-      const clean = !e || !e.detail || e.detail.clean;
-      setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
-    });
-
-    // ——— Controls ———
-    if (btnFull) {
-      btnFull.addEventListener('click', async () => {
-        const el = document.documentElement;
-        try {
-          if (!document.fullscreenElement) await el.requestFullscreen();
-          else await document.exitFullscreen();
-        } catch {}
-      });
-    }
-
-    if (btnDisc) {
-      btnDisc.addEventListener('click', async () => {
-        setStatus('Disconnecting…', 'warn');
-        btnDisc.disabled = true;
-        try {
-          // Prefer POST; fall back to GET if server doesn’t accept it
-          let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
-          if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
-        } catch {}
-        try { rfb.disconnect(); } catch {}
-        toast('Disconnected', 'warn');
-        btnDisc.disabled = false;
-      });
-    }
-
-    if (btnShot) {
-      btnShot.addEventListener('click', async () => {
-        btnShot.disabled = true;
-        btnShot.textContent = 'Snapshotting…';
-        try {
-          // Ensure we have some os_type; server validates too
-          console.log(currentOsType)
-          const osType = currentOsType || 'unknown';
-          const res = await fetch('/vm/snapshot', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ os_type: osType })
-          });
-
-          let msg = res.ok ? 'Snapshot created' : 'Snapshot failed';
-          try {
-            const ct = res.headers.get('content-type') || '';
-            if (ct.includes('application/json')) {
-              const data = await res.json();
-              const id = data.id || data.name || data.snapshot || '';
-              if (id) msg = `Snapshot ${id} created`;
-            } else {
-              const t = (await res.text()).trim();
-              if (t) msg = t;
-            }
-          } catch {}
-
-          toast(msg, res.ok ? 'ok' : 'err');
-          setStatus('Connected', res.ok ? 'ok' : 'err');
-        } catch (e) {
-          console.error('[snapshot] fetch failed:', e);
-          toast('Snapshot request failed', 'err');
-          setStatus('Connected', 'err');
-        } finally {
-          btnShot.disabled = false;
-          btnShot.innerHTML = `
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 7h4l2-2h4l2 2h4v12H4z"/>
-              <circle cx="12" cy="13" r="3"/>
-            </svg> Snapshot
-          `;
+      el.addEventListener('touchstart', (e) => {
+        if (!rfb) return;
+        if (e.touches.length === 1) {
+          const { x, y } = clientToDisplay(e.touches[0]);
+          rfb.sendPointer(x, y, 1); // left down
+          longPressTimer = setTimeout(() => {
+            // turn into right click hold if user holds ~500ms
+            rfb.sendPointer(x, y, 4); // right down
+            rightClickPending = true;
+          }, 500);
         }
-      });
-    } else {
-      console.error('[ui] #btn-shot not found; snapshot disabled');
-    }
-
-    // ——— Hotkeys ———
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'f' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        btnFull?.click();
+      }, { passive: false });
+
+      el.addEventListener('touchmove', (e) => {
+        if (!rfb) return;
+        if (e.touches.length === 1) {
+          const { x, y } = clientToDisplay(e.touches[0]);
+          const btnMask = rightClickPending ? 4 : 1;
+          rfb.sendPointer(x, y, btnMask);
+        } else if (e.touches.length === 2) {
+          // two-finger scroll
+          const dy = e.touches[0].clientY - e.touches[1].clientY; // dummy read to force event
+          // Use wheel events via RFB "sendWheel" if available, otherwise emulate via pointer y steps
+          if (typeof rfb.sendWheel === 'function') {
+            rfb.sendWheel(0, dy > 0 ? 1 : -1);
+          }
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      el.addEventListener('touchend', (e) => {
+        if (!rfb) return;
+        clearTimeout(longPressTimer); longPressTimer = null;
+        const btnMask = rightClickPending ? 0 : 0; // release all
+        // Send a release at last known position
+        const touch = e.changedTouches[0];
+        if (touch) {
+          const { x, y } = clientToDisplay(touch);
+          rfb.sendPointer(x, y, btnMask);
+        } else {
+          // safe release at 0,0
+          rfb.sendPointer(0, 0, 0);
+        }
+        rightClickPending = false;
+        e.preventDefault();
+      }, { passive: false });
+    }
+
+    function clientToDisplay(touch) {
+      // Map client coordinates to the framebuffer coordinate space.
+      // noVNC keeps a canvas sized to CSS, but internally tracks display scale.
+      // The RFB object exposes _display for scale/size; we avoid private access by computing ratios.
+      const canvas = target.querySelector('canvas');
+      const rect = target.getBoundingClientRect();
+      const cx = (touch.clientX - rect.left);
+      const cy = (touch.clientY - rect.top);
+      const fbW = canvas?.width || rect.width;   // fallback if canvas not ready
+      const fbH = canvas?.height || rect.height;
+      const x = Math.max(0, Math.min(fbW - 1, Math.round(cx * (fbW / rect.width))));
+      const y = Math.max(0, Math.min(fbH - 1, Math.round(cy * (fbH / rect.height))));
+      return { x, y };
+    }
+
+    // --- Soft keyboard / input forwarding ---------------------------------
+    function showOSK(show) {
+      oskPanel.classList.toggle('show', show);
+      oskPanel.setAttribute('aria-hidden', show ? 'false' : 'true');
+      kbdBtn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      if (show) setTimeout(() => osk.focus(), 50);
+      else target.focus();
+    }
+
+    // Forward literal text typed into the textarea
+    let lastVal = '';
+    osk.addEventListener('input', () => {
+      const curr = osk.value;
+      // Find the appended part or backspaces
+      if (curr.length > lastVal.length) {
+        const added = curr.slice(lastVal.length);
+        for (const ch of added) sendKeyString(ch);
+      } else if (curr.length < lastVal.length) {
+        const n = lastVal.length - curr.length;
+        for (let i = 0; i < n; i++) sendSpecial('backspace');
+      }
+      lastVal = curr;
+    });
+
+    // Also react to special keys from the device keyboard
+    osk.addEventListener('keydown', (e) => {
+      if (!rfb) return;
+      if (e.key === 'Enter') { e.preventDefault(); sendSpecial('enter'); return; }
+      if (e.key === 'Backspace') { e.preventDefault(); sendSpecial('backspace'); return; }
+      if (e.key === 'Tab') { e.preventDefault(); sendSpecial('tab'); return; }
+      if (e.key === 'Escape') { e.preventDefault(); sendSpecial('esc'); return; }
+    });
+
+    function sendKeyString(str) {
+      if (!rfb) return;
+      // Apply held modifiers
+      if (ctrlHeld) rfb.sendKey('ControlLeft', 'ControlLeft', true);
+      if (altHeld) rfb.sendKey('AltLeft', 'AltLeft', true);
+      rfb.sendKey(str);
+      if (altHeld) rfb.sendKey('AltLeft', 'AltLeft', false);
+      if (ctrlHeld) rfb.sendKey('ControlLeft', 'ControlLeft', false);
+    }
+
+    function sendSpecial(name) {
+      if (!rfb) return;
+      const map = {
+        enter: '\\r',
+        backspace: '\\b',
+        tab: '\\t',
+        esc: '\\x1b',
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        up: 'ArrowUp',
+        down: 'ArrowDown'
+      };
+      const val = map[name];
+      if (!val) return;
+      // Arrow keys via code string; others via control characters
+      if (val.startsWith('Arrow')) {
+        rfb.sendKey(val);
+      } else {
+        rfb.sendKey(val);
+      }
+    }
+
+    // --- UI wiring ---------------------------------------------------------
+    connectBtn.addEventListener('click', () => connect());
+    disconnectBtn.addEventListener('click', () => disconnect());
+
+    $('#cadBtn').addEventListener('click', () => {
+      if (!rfb) return;
+      rfb.sendKey('ControlLeft', 'ControlLeft', true);
+      rfb.sendKey('AltLeft', 'AltLeft', true);
+      rfb.sendKey('Delete');
+      rfb.sendKey('AltLeft', 'AltLeft', false);
+      rfb.sendKey('ControlLeft', 'ControlLeft', false);
+    });
+
+    $('#escBtn').addEventListener('click', () => sendSpecial('esc'));
+
+    $('#rightClickBtn').addEventListener('click', () => {
+      if (!rfb) return;
+      // Send a right click at the center to open context menus if needed
+      const rect = target.getBoundingClientRect();
+      const fake = { clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 };
+      const { x, y } = clientToDisplay(fake);
+      rfb.sendPointer(x, y, 4); // right down
+      setTimeout(() => rfb.sendPointer(x, y, 0), 50);
+    });
+
+    kbdBtn.addEventListener('click', () => {
+      const show = !oskPanel.classList.contains('show');
+      showOSK(show);
+    });
+
+    fsBtn.addEventListener('click', async () => {
+      const root = document.documentElement;
+      if (!document.fullscreenElement) {
+        await root.requestFullscreen().catch(()=>{});
+      } else {
+        await document.exitFullscreen().catch(()=>{});
       }
     });
 
-    // Kick off
-    setStatus('Connecting…');
-    loadOS();
-  });
-</script>
+    ctrlBtn.addEventListener('click', () => {
+      ctrlHeld = !ctrlHeld;
+      ctrlBtn.setAttribute('aria-pressed', String(ctrlHeld));
+    });
+    altBtn.addEventListener('click', () => {
+      altHeld = !altHeld;
+      altBtn.setAttribute('aria-pressed', String(altHeld));
+    });
 
+    // Auto-connect when query params are provided (?host=...&port=...)
+    if (qs('host') || qs('path') || qs('port')) connect();
+
+    // Prevent iOS from zooming the UI buttons on double-tap
+    document.addEventListener('gesturestart', (e)=> e.preventDefault());
+  </script>
 </body>
 </html>
