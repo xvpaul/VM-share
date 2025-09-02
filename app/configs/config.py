@@ -29,6 +29,8 @@ SECRET_KEY   = env("SECRET_KEY", required=True)
 ALGORITHM    = env("ALGORITHM")  # optional
 ACCESS_TOKEN_EXPIRE_MINUTES = env("ACCESS_TOKEN_EXPIRE_MINUTES", 30, cast=int)
 COOKIE_MAX_AGE = env("COOKIE_MAX_AGE", 604800, cast=int)
+TG_BOT_TOKEN = env("TG_BOT_TOKEN")
+TG_CHAT_ID = env("TG_CHAT_ID")
 
 # uploads
 MAX_ISO_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB

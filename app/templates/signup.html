@@ -2,24 +2,50 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- viewport-fit for notches; disable double-tap highlight feel -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Auth • Sign in / Sign up</title>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { theme: { extend: { fontFamily: { sans: ["Inter", "system-ui"] } } } };
   </script>
+
+  <style>
+    /* Use dynamic viewport height on mobile */
+    .min-h-dvh { min-height: 100vh; }
+    @supports (height: 100dvh) { .min-h-dvh { min-height: 100dvh; } }
+
+    /* Respect iOS/Android safe area (e.g., home indicator) */
+    .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+    /* Center the reCAPTCHA widgets and make them behave on narrow screens */
+    #recaptcha-signin, #recaptcha-signup { display: flex; justify-content: center; }
+    /* Keep inputs tall enough so iOS won't zoom */
+    input, button { font-size: 16px; }
+
+    /* Improve focus visibility on dark background */
+    .focus-ring { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+    .focus-ring:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.45); }
+
+    /* Small phones: slightly tighter inner padding to avoid overflow */
+    @media (max-width: 360px) {
+      .card-pad { padding: 1rem !important; }
+    }
+  </style>
 </head>
-<body class="h-full bg-black text-white">
-  <main class="flex min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl">
+<body class="h-full bg-black text-white font-sans">
+  <!-- Center on large screens; on phones, keep top-ish with safe padding so keyboard has room -->
+  <main class="min-h-dvh flex items-center justify-center p-4 sm:p-6 pb-safe">
+    <div class="w-full max-w-sm sm:max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 sm:p-6 card-pad shadow-2xl">
 
       <!-- Tabs -->
-      <div class="mb-6 grid grid-cols-2 rounded-xl border border-white/15 p-1 text-sm" role="tablist">
+      <div class="mb-6 grid grid-cols-2 rounded-xl border border-white/15 p-1 text-sm" role="tablist" aria-label="Auth tabs">
         <button id="tab-signin" role="tab" aria-selected="true" aria-controls="panel-signin"
-          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black"
+          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black focus-ring"
           data-active="true">Sign in</button>
         <button id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup"
-          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black">Sign up</button>
+          class="rounded-lg px-3 py-2 font-medium data-[active=true]:bg-white data-[active=true]:text-black focus-ring">Sign up</button>
       </div>
 
       <div class="my-4 flex items-center gap-3">
@@ -30,22 +56,22 @@
 
       <!-- Sign In -->
       <div id="panel-signin" role="tabpanel" aria-labelledby="tab-signin" class="grid gap-4">
-        <form class="grid gap-4" id="signin-form">
+        <form class="grid gap-4" id="signin-form" novalidate>
           <div class="grid gap-2">
             <label for="login" class="text-sm">Login</label>
-            <input id="login" name="login" type="text"
-              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+            <input id="login" name="login" type="text" autocomplete="username" enterkeyhint="next" spellcheck="false"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 focus-ring"/>
           </div>
           <div class="grid gap-2">
             <label for="password" class="text-sm">Password</label>
-            <input id="password" name="password" type="password"
-              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+            <input id="password" name="password" type="password" autocomplete="current-password" enterkeyhint="done"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 focus-ring"/>
           </div>
 
           <div id="recaptcha-signin" class="mt-1"></div>
 
           <button type="submit"
-            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">
+            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90 focus-ring">
             Sign in
           </button>
         </form>
@@ -53,27 +79,27 @@
 
       <!-- Sign Up -->
       <div id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" class="hidden grid gap-4">
-        <form class="grid gap-4" id="signup-form">
+        <form class="grid gap-4" id="signup-form" novalidate>
           <div class="grid gap-2">
             <label for="login-signup" class="text-sm">Login</label>
-            <input id="login-signup" name="login" type="text"
-              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+            <input id="login-signup" name="login" type="text" autocomplete="username" enterkeyhint="next" spellcheck="false"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 focus-ring"/>
           </div>
           <div class="grid gap-2">
             <label for="password2" class="text-sm">Password</label>
-            <input id="password2" name="password" type="password"
-              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+            <input id="password2" name="password" type="password" autocomplete="new-password" enterkeyhint="next"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 focus-ring"/>
           </div>
           <div class="grid gap-2">
             <label for="confirm" class="text-sm">Confirm password</label>
-            <input id="confirm" name="confirm" type="password"
-              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 outline-none"/>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password" enterkeyhint="done"
+              class="w-full rounded-xl border border-white/15 bg-neutral-950 px-4 py-3 text-white placeholder:text-white/40 focus-ring"/>
           </div>
 
           <div id="recaptcha-signup" class="mt-1"></div>
 
           <button type="submit"
-            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90">
+            class="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-white px-5 py-3 text-base font-semibold text-black hover:bg-white/90 focus-ring">
             Create account
           </button>
         </form>
@@ -83,24 +109,61 @@
   </main>
 
   <script>
-  // make them global so module JS can read them
-  window.widgetSignin = null;
-  window.widgetSignup = null;
+    // expose widgets so your module can read them
+    window.widgetSignin = null;
+    window.widgetSignup = null;
 
-  window.onRecaptchaLoad = function () {
-    window.widgetSignin = grecaptcha.render("recaptcha-signin", {
-      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-      theme: "dark"
-    });
-    window.widgetSignup = grecaptcha.render("recaptcha-signup", {
-      sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
-      theme: "dark"
-    });
-  };
-</script>
+    window.onRecaptchaLoad = function () {
+      window.widgetSignin = grecaptcha.render("recaptcha-signin", {
+        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+        theme: "dark"
+      });
+      window.widgetSignup = grecaptcha.render("recaptcha-signup", {
+        sitekey: "6LcKZrYrAAAAAC-7H0c7_Qx0p8v2zeqEEpAL4nI6",
+        theme: "dark"
+      });
+    };
+
+    // Lightweight tabs: preserve your markup & ARIA
+    (function () {
+      const tabIn  = document.getElementById('tab-signin');
+      const tabUp  = document.getElementById('tab-signup');
+      const pnlIn  = document.getElementById('panel-signin');
+      const pnlUp  = document.getElementById('panel-signup');
+
+      function activate(which) {
+        const isIn = which === 'in';
+        tabIn.dataset.active = isIn;
+        tabUp.dataset.active = !isIn;
+        tabIn.setAttribute('aria-selected', String(isIn));
+        tabUp.setAttribute('aria-selected', String(!isIn));
+        pnlIn.classList.toggle('hidden', !isIn);
+        pnlUp.classList.toggle('hidden', isIn);
+        // Move focus to first field for better mobile flow
+        setTimeout(() => {
+          const target = (isIn ? pnlIn : pnlUp).querySelector('input');
+          target?.focus({ preventScroll: true });
+          target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 10);
+      }
+      tabIn.addEventListener('click', () => activate('in'));
+      tabUp.addEventListener('click', () => activate('up'));
+    })();
+
+    // Nudge focused input into view on mobile so the keyboard doesn't cover it
+    (function () {
+      const inputs = document.querySelectorAll('input');
+      inputs.forEach(el => {
+        el.addEventListener('focus', () => {
+          setTimeout(() => {
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }, 80);
+        });
+      });
+    })();
+  </script>
 
   <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
-
   <script type="module" src="static/scripts/signup.js"></script>
 </body>
 </html>
