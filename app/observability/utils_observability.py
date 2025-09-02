@@ -8,6 +8,14 @@ from sentry_sdk import capture_message
 
 logger = logging.getLogger(__name__)
 
+# Telegram reporting (same package)
+try:
+    from .report import telegram_reporting  # /app/observability/report.py
+except Exception as _e:
+    logger.error("Failed to import telegram_reporting: %s", _e)
+    def telegram_reporting(message: str) -> None:  # no-op fallback
+        logger.error("telegram_reporting not available; message was: %s", message)
+
 # ---- Thresholds ----
 CPU_THRESH = 90        # %
 RAM_THRESH = 85        # %
@@ -16,7 +24,7 @@ INTERVAL   = 5         # seconds between checks
 
 # Alert when these devices have ≤ given GiB free (device -> GiB)
 DISK_FREE_THRESHOLDS_GIB = {
-    "/dev/vda2": 30,   # root disk on your host
+    "/dev/vda2": 40,   # root disk on your host
 }
 
 # ---- Helpers ----
@@ -54,7 +62,6 @@ def _device_partition_map() -> dict[str, psutil._common.sdiskpart]:  # device ->
             continue
         if p.fstype in _PSEUDO_FS:
             continue
-        # prefer the shortest mountpoint (e.g., '/' over '/some/sub/mount')
         cur = devmap.get(p.device)
         if cur is None or len(p.mountpoint) < len(cur.mountpoint):
             devmap[p.device] = p
@@ -81,7 +88,11 @@ async def resource_watchdog(stop_event: asyncio.Event):
                 msg = f"[Host] CPU ≥{CPU_THRESH}% for {SUSTAINED}s (now {cpu:.0f}%)"
                 logger.warning(msg)
                 capture_message(msg, level="warning")
-                over_cpu = now  # reset window so repeated alerts require another sustained period
+                try:
+                    telegram_reporting(msg)
+                except Exception as e:
+                    logger.error("telegram_reporting CPU error: %s", e)
+                over_cpu = now  # reset window
 
             # --- RAM ---
             vm = psutil.virtual_memory()
@@ -102,6 +113,10 @@ async def resource_watchdog(stop_event: asyncio.Event):
                 )
                 logger.warning(msg)
                 capture_message(msg, level="warning")
+                try:
+                    telegram_reporting(msg)
+                except Exception as e:
+                    logger.error("telegram_reporting RAM error: %s", e)
                 over_ram = now
 
             # --- DISK FREE (absolute GiB by device) ---
@@ -109,7 +124,6 @@ async def resource_watchdog(stop_event: asyncio.Event):
             for dev, thresh_gib in DISK_FREE_THRESHOLDS_GIB.items():
                 part = devmap.get(dev)
                 if not part:
-                    # Device not mounted/visible; clear any ongoing window
                     over_disk_free.pop(dev, None)
                     continue
 
@@ -120,7 +134,9 @@ async def resource_watchdog(stop_event: asyncio.Event):
                     continue
 
                 free_gib = du.free / (1024 ** 3)
-                over_disk_free[dev], fire_free = _sustained(now, over_disk_free.get(dev), free_gib <= float(thresh_gib))
+                over_disk_free[dev], fire_free = _sustained(
+                    now, over_disk_free.get(dev), free_gib <= float(thresh_gib)
+                )
                 if fire_free:
                     msg = (
                         f"[Host] Disk {dev} free ≤{thresh_gib} GiB for {SUSTAINED}s "
@@ -129,6 +145,10 @@ async def resource_watchdog(stop_event: asyncio.Event):
                     )
                     logger.warning(msg)
                     capture_message(msg, level="warning")
+                    try:
+                        telegram_reporting(msg)
+                    except Exception as e:
+                        logger.error("telegram_reporting DISK error: %s", e)
                     over_disk_free[dev] = now
 
         except Exception as e:
