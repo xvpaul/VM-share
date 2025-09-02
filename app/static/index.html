@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Better behavior on phones + notches -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Get Virtual Machines</title>
 
   <!-- Tailwind CDN -->
@@ -14,371 +13,290 @@
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="static/css/index.css" />
-  <style>
-    /* Mobile polish */
-    :root { --ring: 255 255 255 / .12; }
-
-    /* Smooth scroll & snapping for the OS carousel */
-    .snap-x { scroll-snap-type: x mandatory; }
-    .snap-start { scroll-snap-align: start; }
-
-    /* Hide scrollbars on mobile while keeping scrollable */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* Fancy card outline (subtle) */
-    .glass {
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.12);
-      box-shadow: 0 10px 40px rgba(0,0,0,.35);
-    }
-
-    /* Inputs/buttons */
-    .input {
-      @apply w-full rounded-xl bg-white/5 placeholder-white/50 outline-none ring-1 ring-white/10 focus:ring-white/30;
-    }
-    .submit-btn {
-      @apply rounded-xl bg-fuchsia-600/80 hover:bg-fuchsia-600 transition-colors font-semibold;
-    }
-
-    /* Grain background relies on your existing .grain-bg class in index.css */
-
-    /* Auth modal max width for small phones */
-    @media (max-width: 420px) {
-      #auth-card { width: 92vw; padding: 1.25rem; }
-    }
-  </style>
 </head>
 
-<body class="bg-neutral-950 text-white min-h-screen flex flex-col grain-bg font-[Inter]">
+<body class="bg-neutral-950 text-white min-h-screen flex flex-col grain-bg">
 
-  <!-- Background particles -->
-  <div id="particles-js" class="fixed inset-0 pointer-events-none -z-10"></div>
+  <!-- Added particle styling -->
+ <div id="particles-js" class="fixed inset-0 pointer-events-none -z-10"></div>
+
 
   <!-- Header -->
-  <header class="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/85 backdrop-blur">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 shadow-inner"></div>
-        <span class="text-lg font-bold tracking-tight">sc21 VMs</span>
-      </div>
-      <div class="flex items-center">
-        <button id="auth-btn" class="px-3 py-2 rounded-lg text-sm font-semibold hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/30">
-          Log in / Sign Up
-        </button>
-        <button id="logout-btn" class="hidden ml-2 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/30">
-          Log out
-        </button>
-      </div>
+<header class="border-b border-neutral-800 bg-neutral-950/90">
+    <div class="max-w-7xl mx-auto px-6 py-6 flex justify-end items-center">
+      <button id="auth-btn" class="hover:text-white text-lg font-semibold">Log in / Sign Up</button>
+      <button id="logout-btn" class="hidden hover:text-white ml-6 text-lg font-semibold">Log out</button>
     </div>
   </header>
 
   <!-- Auth Modal -->
-  <div id="auth-modal" class="fixed inset-0 hidden items-center justify-center bg-black/40 backdrop-blur z-40">
-    <div id="auth-card" class="glass p-6 sm:p-8 rounded-2xl w-[26rem] max-w-full relative text-white">
-      <button id="close-auth" class="absolute top-2.5 right-3 text-3xl text-neutral-400 hover:text-white leading-none">&times;</button>
-      <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 sm:mb-8">Welcome</h2>
+  <div id="auth-modal" class="fixed inset-0 hidden flex items-center justify-center bg-black/40 backdrop-blur z-40">
+    <div class="bg-neutral-900 p-8 rounded-xl w-96 relative shadow-2xl text-white">
+      <button id="close-auth" class="absolute top-3 right-4 text-3xl text-neutral-500 hover:text-white">&times;</button>
+      <h2 class="text-3xl font-bold text-center mb-8">Welcome</h2>
 
       <!-- Tabs -->
-      <div class="flex justify-center gap-6 sm:gap-8 mb-6 sm:mb-8">
-        <button id="tab-login" class="text-white border-b-2 border-white font-semibold text-lg">Log In</button>
-        <button id="tab-signup" class="text-white/60 hover:text-white font-semibold text-lg">Sign Up</button>
+      <div class="flex justify-center gap-8 mb-8">
+        <button id="tab-login" class="text-white border-b-2 border-white font-semibold text-xl">Log In</button>
+        <button id="tab-signup" class="text-white/60 hover:text-white font-semibold text-xl">Sign Up</button>
       </div>
 
       <!-- Log In Form -->
-      <form id="login-form" class="tab-form flex flex-col space-y-4 sm:space-y-6">
-        <input type="text" placeholder="Email" required class="input text-base sm:text-lg px-4 py-3 sm:p-4" />
-        <input type="password" placeholder="Password" required class="input text-base sm:text-lg px-4 py-3 sm:p-4" />
-        <button type="submit" class="submit-btn text-base sm:text-lg py-3">Log In</button>
+      <form id="login-form" class="tab-form flex flex-col space-y-6">
+        <input type="text" placeholder="Email" required class="input text-xl p-4" />
+        <input type="password" placeholder="Password" required class="input text-xl p-4" />
+        <button type="submit" class="submit-btn text-xl py-3">Log In</button>
       </form>
 
       <!-- Sign Up Form -->
-      <form id="signup-form" class="tab-form hidden flex flex-col space-y-4 sm:space-y-6">
-        <input type="text" placeholder="Email" required class="input text-base sm:text-lg px-4 py-3 sm:p-4" />
-        <input type="password" placeholder="Password" required class="input text-base sm:text-lg px-4 py-3 sm:p-4" />
-        <button type="submit" class="submit-btn text-base sm:text-lg py-3">Sign Up</button>
+      <form id="signup-form" class="tab-form hidden flex flex-col space-y-6">
+        <input type="text" placeholder="Email" required class="input text-xl p-4" />
+        <input type="password" placeholder="Password" required class="input text-xl p-4" />
+        <button type="submit" class="submit-btn text-xl py-3">Sign Up</button>
       </form>
 
-      <p id="auth-msg" class="text-center text-red-400 text-sm sm:text-base mt-4 sm:mt-6"></p>
+      <p id="auth-msg" class="text-center text-red-400 text-lg mt-6"></p>
     </div>
   </div>
 
   <!-- Main Content -->
-  <main class="flex-grow">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-10 sm:py-16 space-y-10">
+ <main class="flex-grow [&_.rounded-2xl]:bg-white/15">
+  <div class="mx-auto max-w-6xl px-6 py-16 space-y-10">
 
-      <!-- Hero -->
-      <section class="text-center space-y-4 sm:space-y-6">
-        <h1 class="text-4xl sm:text-6xl font-bold leading-tight">
-          Get started with virtual machines
-        </h1>
-        <p class="text-base sm:text-xl text-neutral-400 max-w-2xl sm:max-w-3xl mx-auto">
-          Provision and launch your favorite Linux distro in one click. Fast, minimal, and secure.
-        </p>
-      </section>
+    <!-- Hero -->
+    <section class="text-center">
+      <h1 class="text-5xl sm:text-6xl font-bold mb-6">Get started with virtual machines</h1>
+      <p class="text-xl text-neutral-400 max-w-3xl mx-auto">
+        Provision and launch your favorite Linux distro in one click. Fast, minimal, and secure.
+      </p>
+    </section>
 
-      <!-- OS Carousel (mobile-first) -->
-      <section class="relative">
-        <!-- Arrows (hidden on very small screens, show >= sm) -->
-        <button id="os-prev"
-                class="hidden sm:flex absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
-                       bg-white/10 ring-1 ring-white/20 hover:bg-white/20 items-center justify-center"
-                aria-label="Previous">
-          &#8592;
-        </button>
-        <button id="os-next"
-                class="hidden sm:flex absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
-                       bg-white/10 ring-1 ring-white/20 hover:bg-white/20 items-center justify-center"
-                aria-label="Next">
-          &#8594;
-        </button>
+ <!-- VM Panels Section -->
+<!-- OS Carousel -->
+<section class="relative max-w-6xl mx-auto px-4">
+  <!-- Arrows -->
+  <button id="os-prev"
+        class="absolute -left-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+               bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
+  &#8592;
+</button>
+<button id="os-next"
+        class="absolute -right-5 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+               bg-white/10 ring-1 ring-white/20 hover:bg-white/20 flex items-center justify-center">
+  &#8594;
+</button>
+  <!-- Carousel -->
+  <div class="overflow-hidden mt-4">
+    <div id="os-track"
+         class="flex transition-transform duration-500 ease-in-out will-change-transform">
+      
+      <!-- Slide: Alpine -->
+<article class="os-slide p-6 w-full sm:w-1/2 lg:w-1/3 flex-shrink-0">
+  <div class="h-full flex flex-col justify-between rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
+    <!-- top content -->
+    <div>
+      <h3 class="text-2xl font-semibold mb-2">Alpine Linux</h3>
+      <p class="text-neutral-400">Minimalist design. Lightning-fast startup.</p>
+    </div>
 
-        <!-- Scroll-snap track -->
-        <div id="os-track"
-             class="mt-4 -mx-4 px-4 overflow-x-auto no-scrollbar snap-x snap-mandatory flex gap-4 sm:gap-6 scroll-pt-4"
-             role="listbox" aria-label="Operating systems">
-          
-          <!-- Slide Template: Mobile uses ~85% width, desktop uses grid-like thirds -->
-          <!-- Alpine -->
-          <article class="os-slide snap-start min-w-[85%] sm:min-w-[48%] lg:min-w-[32%] glass rounded-2xl p-5 sm:p-6 flex flex-col justify-between" role="option" aria-label="Alpine Linux">
-            <div>
-              <h3 class="text-xl sm:text-2xl font-semibold mb-2">Alpine Linux</h3>
-              <p class="text-neutral-400 text-sm sm:text-base">Minimalist design. Lightning-fast startup.</p>
-            </div>
-            <button data-os="alpine"
-              class="vm-btn mt-6 flex items-center justify-center gap-2 text-sm sm:text-base px-4 py-2 rounded-lg bg-black/50 ring-1 ring-white/10 hover:bg-black/70 transition-all">
-              <svg class="w-4 h-4" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-                <path d="M15.9,188.6l44.2-71.9l40.7,70.7L15.9,188.6z M76.6,116.1L130.5,29L240.1,190.6l-87.5,0.6L76.6,116.1z" />
-              </svg>
-              Get Alpine Linux
-            </button>
-          </article>
+    <!-- bottom button -->
+    <button data-os="alpine"
+      class="vm-btn mt-6 flex items-center justify-center gap-2 text-base px-4 py-2 rounded-md bg-black/60 ring-1 ring-white/10 hover:bg-black/80 transition-all mx-auto">
+      <svg class="w-4 h-4" viewBox="0 0 256 256" fill="currentColor">
+        <path d="M15.9,188.6l44.2-71.9l40.7,70.7L15.9,188.6z M76.6,116.1L130.5,29L240.1,190.6l-87.5,0.6L76.6,116.1z" />
+      </svg>
+      Get Alpine Linux
+    </button>
+  </div>
+</article>
 
-          <!-- Tiny Core -->
-          <article class="os-slide snap-start min-w-[85%] sm:min-w-[48%] lg:min-w-[32%] glass rounded-2xl p-5 sm:p-6 flex flex-col justify-between" role="option" aria-label="Tiny Core Linux">
-            <div>
-              <h3 class="text-xl sm:text-2xl font-semibold mb-2">Tiny Core Linux</h3>
-              <p class="text-neutral-400 text-sm sm:text-base">Ultra-lightweight minimal desktop.</p>
-            </div>
-            <button data-os="tiny"
-              class="vm-btn mt-6 flex items-center justify-center gap-2 text-sm sm:text-base px-4 py-2 rounded-lg bg-black/50 ring-1 ring-white/10 hover:bg-black/70 transition-all">
-              <svg class="w-4 h-4" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
-                <path d="M32 4C17.6 4 6 15.6 6 30c0 3.9 0.8 7.5 2.2 10.9c0.4 1 1.8 1.2 2.5 0.4l6.5-6.5c0.5-0.5 0.6-1.3 0.3-2
-                C16.5 30.3 18.7 25.3 23 22.6c5.3-3.3 12.3-1.6 15.6 3.7c2.1 3.4 2.1 7.6 0.2 11.1c-0.4 0.8-0.2 1.7 0.5 2.3l6.8 5.6
-                c0.9 0.7 2.2 0.4 2.6-0.7C52.2 40.9 54 35.6 54 30C54 15.6 46.4 4 32 4zM32 58c-1.1 0-2-0.9-2-2v-4c0-1.1 0.9-2 2-2s2 0.9 2 2v4
-                C34 57.1 33.1 58 32 58z" />
-              </svg>
-              Get Tiny Core
-            </button>
-          </article>
+<!-- Slide: Tiny Core -->
+<article class="os-slide p-6 w-full sm:w-1/2 lg:w-1/3 flex-shrink-0">
+  <div class="h-full flex flex-col justify-between rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
+    <!-- top content -->
+    <div>
+      <h3 class="text-2xl font-semibold mb-2">Tiny Core Linux</h3>
+      <p class="text-neutral-400">Ultra-lightweight minimal desktop.</p>
+    </div>
 
-          <!-- Ubuntu -->
-          <article class="os-slide snap-start min-w-[85%] sm:min-w-[48%] lg:min-w-[32%] glass rounded-2xl p-5 sm:p-6 flex flex-col justify-between" role="option" aria-label="Ubuntu (20.04 LTS)">
-            <div>
-              <h3 class="text-xl sm:text-2xl font-semibold mb-2">Ubuntu (20.04 LTS)</h3>
-              <p class="text-neutral-400 text-sm sm:text-base">Clear, fast and secure. Headless.</p>
-            </div>
-            <button data-os="ubuntu"
-              class="vm-btn mt-6 flex items-center justify-center gap-2 text-sm sm:text-base px-4 py-2 rounded-lg bg-black/50 ring-1 ring-white/10 hover:bg-black/70 transition-all">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2a10 10 0 100 20 10 10 0 000-20zM5 13a1 1 0 110-2 1 1 0 010 2zm7-7a1 1 0 110 2 1 1 0 010-2zm7 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-              Get Ubuntu
-            </button>
-          </article>
+    <!-- bottom button -->
+    <button data-os="tiny"
+      class="vm-btn mt-6 flex items-center justify-center gap-2 text-base px-4 py-2 rounded-md bg-black/60 ring-1 ring-white/10 hover:bg-black/80 transition-all mx-auto">
+      <svg class="w-4 h-4" viewBox="0 0 64 64" fill="currentColor">
+        <path d="M32 4C17.6 4 6 15.6 6 30c0 3.9 0.8 7.5 2.2 10.9c0.4 1 1.8 1.2 2.5 0.4l6.5-6.5c0.5-0.5 0.6-1.3 0.3-2
+               C16.5 30.3 18.7 25.3 23 22.6c5.3-3.3 12.3-1.6 15.6 3.7c2.1 3.4 2.1 7.6 0.2 11.1c-0.4 0.8-0.2 1.7 0.5 2.3l6.8 5.6
+               c0.9 0.7 2.2 0.4 2.6-0.7C52.2 40.9 54 35.6 54 30C54 15.6 46.4 4 32 4zM32 58c-1.1 0-2-0.9-2-2v-4c0-1.1 0.9-2 2-2s2 0.9 2 2v4
+               C34 57.1 33.1 58 32 58z" />
+      </svg>
+      Get Tiny Core
+    </button>
+  </div>
+</article>
 
-          <!-- Custom Image -->
-          <article class="os-slide snap-start min-w-[85%] sm:min-w-[48%] lg:min-w-[32%] glass rounded-2xl p-5 sm:p-6 flex flex-col justify-between" role="option" aria-label="Custom Image">
-            <div>
-              <h3 class="text-xl sm:text-2xl font-semibold mb-2">Custom Image</h3>
-              <p class="text-neutral-400 text-sm sm:text-base mb-4">Upload your own disk image. You can try .iso.</p>
-              <input id="custom-file" data-custom type="file" accept=".iso"
-                class="block w-full text-sm sm:text-base mb-3 file:mr-4 file:rounded-md file:border-0 file:bg-fuchsia-500/20 file:px-3 file:py-2 file:text-fuchsia-200 file:ring-1 file:ring-fuchsia-400/30 file:hover:bg-fuchsia-500/30" />
-              <p id="custom-msg" class="text-sm text-neutral-400"></p>
-            </div>
-            <button data-os="custom" id="custom-btn" disabled
-              class="vm-btn mt-6 flex items-center justify-center gap-2 text-sm sm:text-base px-4 py-2 rounded-lg bg-black/50 ring-1 ring-white/10 hover:bg-black/70 transition-all">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2a7 7 0 00-6.71 5.02A5.002 5.002 0 006 22h13a4.5 4.5 0 00.39-8.98A7 7 0 0012 2zm0 8l3 3h-2v4h-2v-4H9l3-3z"/>
-              </svg>
-              Launch Custom Image
-            </button>
-          </article>
-        </div>
+<!-- Slide: Ubuntu -->
+<article class="os-slide p-6 w-full sm:w-1/2 lg:w-1/3 flex-shrink-0">
+  <div class="h-full flex flex-col justify-between rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
+    <!-- top content -->
+    <div>
+      <h3 class="text-2xl font-semibold mb-2">Ubuntu (20.04 LTS)</h3>
+      <p class="text-neutral-400">Clear, fast and secure. Headless.</p>
+    </div>
 
-        <!-- Dots (auto-updated by JS) -->
-        <div id="os-dots" class="mt-4 flex justify-center gap-2"></div>
-      </section>
+    <!-- bottom button -->
+    <button data-os="ubuntu"
+      class="vm-btn mt-6 flex items-center justify-center gap-2 text-base px-4 py-2 rounded-md bg-black/60 ring-1 ring-white/10 hover:bg-black/80 transition-all mx-auto">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2a10 10 0 100 20 10 10 0 000-20zM5 13a1 1 0 110-2 1 1 0 010 2zm7-7a1 1 0 110 2 1 1 0 010-2zm7 7a1 1 0 110-2 1 1 0 010 2z" />
+      </svg>
+      Get Ubuntu
+    </button>
+  </div>
+</article>
 
-      <!-- FAQ Panel -->
-      <section class="glass rounded-2xl p-5 sm:p-6">
-        <h2 class="text-2xl sm:text-3xl font-bold mb-4">FAQ</h2>
-        <div class="divide-y divide-white/10">
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              What can I run?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Alpine Linux, Tiny Core Linux, Ubuntu 20.04 LTS and your custom .iso.
-            </p>
-          </details>
+<!-- Slide: Custom Image -->
+<article class="os-slide p-6 w-full sm:w-1/2 lg:w-1/3 flex-shrink-0">
+  <div class="h-full flex flex-col justify-between rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
+    <!-- top content -->
+    <div>
+      <h3 class="text-2xl font-semibold mb-2">Custom Image</h3>
+      <p class="text-neutral-400 mb-4">Upload your own disk image. You can try .iso.</p>
+      <input id="custom-file" data-custom type="file" accept=".iso"
+             class="block w-full text-sm mb-3 file:mr-4 file:rounded-md file:border-0 file:bg-fuchsia-500/20 file:px-3 file:py-2 file:text-fuchsia-200 file:ring-1 file:ring-fuchsia-400/30 file:hover:bg-fuchsia-500/30" />
+      <p id="custom-msg" class="mt-2 text-sm text-neutral-400"></p>
+    </div>
 
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              Can I really upload any ISO and run it?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Yes and no. You can try uploading a lightweight Linux distribution, and it may even be usable, but nothing is guaranteed. Heavier systems, like GNOME-based Ubuntu, will likely fail to boot due to limited VPS capacity and the lack of <code>/dev/kvm</code> access.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              What happens when I click the “Get” button?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              A base image overlay will be created, and you’ll be redirected to a web interface where you can control your virtual machine.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              What about a GUI?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              I’ve tried Slax—it booted, ran, and was somewhat usable. Other lightweight systems like this can also be booted and run.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              I’m getting strange errors / the VM boots very slowly
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Look—no <code>/dev/kvm</code>, cheap VPS… it’s a miracle that anything boots at all!
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              How long do VMs stay alive?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Currently, they stay up for about an hour, unless the authentication token expires earlier.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              Will Windows or newer Linux distributions be added?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              That depends entirely on whether I can afford a real server or at least gain access to <code>/dev/kvm</code>. Stay tuned.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              Are snapshots available?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Yep. You can manage snapshots from your profile panel. Just keep in mind that snapshots currently can’t exceed 300&nbsp;MB—which is basically Alpine Linux with a few small packages. This limit may be increased in the future.
-            </p>
-          </details>
-
-          <details class="group py-4">
-            <summary class="flex cursor-pointer items-center justify-between text-base sm:text-lg font-semibold">
-              Can I manage virtual machines on my phone?
-              <span class="ml-4 transition-transform group-open:rotate-45">+</span>
-            </summary>
-            <p class="mt-2 text-neutral-400 text-sm sm:text-base">
-              Yes—this site is optimized for touch, and the VM console supports taps + the mobile keyboard.
-            </p>
-          </details>
-        </div>
-      </section>
+    <!-- bottom button -->
+    <button data-os="custom" id="custom-btn" disabled
+      class="vm-btn mt-6 flex items-center justify-center gap-2 text-base px-4 py-2 rounded-md bg-black/60 ring-1 ring-white/10 hover:bg-black/80 transition-all mx-auto">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2a7 7 0 00-6.71 5.02A5.002 5.002 0 006 22h13a4.5 4.5 0 00.39-8.98A7 7 0 0012 2zm0 8l3 3h-2v4h-2v-4H9l3-3z"/>
+      </svg>
+      Launch Custom Image
+    </button>
+  </div>
+</article>
 
     </div>
-  </main>
+  </div>
+</section>
+
+    <!-- FAQ Panel -->
+    <section class="rounded-2xl bg-white/5 backdrop-blur-sm ring-1 ring-white/10 shadow-xl p-6">
+  <h2 class="text-3xl font-bold mb-4">FAQ</h2>
+  <div class="divide-y divide-white/10">
+  
+    <details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    What can I run?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Alpine Linux, Tiny Core Linux, Ubuntu 20.04 LTS and your custom .iso.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    Can I really upload any ISO and run it?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Yes and no. You can try uploading a lightweight Linux distribution, and it may even be usable, but nothing is guaranteed. Heavier systems, like GNOME-based Ubuntu, will likely fail to boot due to limited VPS capacity and the lack of <code>/dev/kvm</code> access.
+  </p>
+</details>
+
+  <details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    What happens when I click the “Get” button?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    A base image overlay will be created, and you’ll be redirected to a web interface where you can control your virtual machine.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    What about a GUI?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    I’ve tried Slax—it booted, ran, and was somewhat usable. Other lightweight systems like this can also be booted and run.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    I’m getting strange errors / the VM boots very slowly
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Look—no <code>/dev/kvm</code>, cheap VPS… it’s a miracle that anything boots at all!
+  </p>
+</details>
+
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    How long do VMs stay alive?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Currently, they stay up for about an hour, unless the authentication token expires earlier.
+  </p>
+</details>
+
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    Will Windows or newer Linux distributions be added?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    That depends entirely on whether I can afford a real server or at least gain access to <code>/dev/kvm</code>. Stay tuned.
+  </p>
+</details>
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    Are snapshots available?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    Yep. You can manage snapshots from your profile panel. Just keep in mind that snapshots currently can’t exceed 300&nbsp;MB—which is basically Alpine Linux with a few small packages. This limit may be increased in the future.
+  </p>
+</details>
+
+
+<details class="group py-4">
+  <summary class="flex cursor-pointer items-center justify-between text-lg font-semibold">
+    Can I manage virtual machines on my phone?
+    <span class="ml-4 transition-transform group-open:rotate-45">+</span>
+  </summary>
+  <p class="mt-2 text-neutral-400">
+    In the near future, once the web interface includes proper touch support.
+  </p>
+</details>
+
+
+
+  </div>
+</section>
+
+
+  </div>
+</main>
+
 
   <!-- Footer -->
-  <footer class="border-t border-neutral-800 bg-neutral-950/90 text-center text-base sm:text-xl text-neutral-500 py-6 sm:py-8 mt-auto">
-    © 2025 sc21: soledaco
-  </footer>
+ <footer class="border-t border-neutral-800 bg-neutral-950/90 text-center text-xl text-neutral-500 py-8 mt-auto">
+  © 2025 sc21: soledaco
+</footer>
 
   <!-- JS Logic -->
   <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
   <script src="static/scripts/particles.js"></script>
   <script type="module" src="static/scripts/script.js"></script>
 
-  <!-- Lightweight carousel logic (keeps your IDs intact) -->
-  <script>
-    (function () {
-      const track = document.getElementById('os-track');
-      const prev  = document.getElementById('os-prev');
-      const next  = document.getElementById('os-next');
-      const dots  = document.getElementById('os-dots');
-      if (!track || !dots) return;
-
-      const slides = Array.from(track.querySelectorAll('.os-slide'));
-      function slideWidth() {
-        // width of one slide + gap
-        const first = slides[0];
-        if (!first) return track.clientWidth;
-        const style = getComputedStyle(first);
-        const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap || '16');
-        return first.getBoundingClientRect().width + (Number.isFinite(gap) ? gap : 16);
-      }
-
-      // Dots
-      dots.innerHTML = '';
-      slides.forEach((_, i) => {
-        const b = document.createElement('button');
-        b.className = 'h-2 w-2 rounded-full bg-white/30 aria-selected:bg-white aria-selected:w-5 transition-all';
-        b.setAttribute('aria-label', 'Go to slide ' + (i + 1));
-        b.addEventListener('click', () => {
-          track.scrollTo({ left: slides[i].offsetLeft - 16, behavior: 'smooth' });
-        });
-        dots.appendChild(b);
-      });
-
-      function updateDots() {
-        const center = track.scrollLeft + track.clientWidth / 2;
-        let active = 0;
-        for (let i = 0; i < slides.length; i++) {
-          const r = slides[i].getBoundingClientRect();
-          const left = r.left + window.scrollX - track.scrollLeft;
-          const mid = slides[i].offsetLeft + r.width / 2;
-          if (mid <= center) active = i;
-        }
-        dots.querySelectorAll('button').forEach((b, i) => {
-          if (i === active) b.setAttribute('aria-selected', 'true');
-          else b.removeAttribute('aria-selected');
-        });
-      }
-      updateDots();
-
-      track.addEventListener('scroll', () => { requestAnimationFrame(updateDots); }, { passive: true });
-
-      function scrollByAmount(dir = 1) {
-        track.scrollBy({ left: dir * slideWidth(), behavior: 'smooth' });
-      }
-      prev?.addEventListener('click', () => scrollByAmount(-1));
-      next?.addEventListener('click', () => scrollByAmount(1));
-
-      // Enable swiping via native scrolling (already) + inertia; nothing else needed.
-      // Ensure we start with first dot selected
-      window.addEventListener('resize', () => { requestAnimationFrame(updateDots); });
-    })();
-  </script>
 </body>
 </html>
