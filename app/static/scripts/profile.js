@@ -186,14 +186,6 @@ const GRAFANA_IFRAMES = [
   {
     title: 'Request rate (rps, 1m)',
     src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=4&theme=dark&kiosk'
-  },
-  {
-    title: 'User-count',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=2&theme=dark&kiosk'
-  },
-  {
-    title: 'Active-sessions (3h)',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=1&theme=dark&kiosk'
   }
 ];
 
