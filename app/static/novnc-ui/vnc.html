@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- Mobile viewport -->
+  <!-- Added viewport-fit for notches; left user zoom behavior unchanged -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Loading OS…</title>
   <style>
@@ -13,50 +13,29 @@
       --fg: #e8eaed;
       --muted: #99a2ad;
       --border: #1f2632;
-      --accent: #4f46e5;
-      --accent-2: #22d3ee;
-      --ok: #22c55e;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --bar-h: 56px;
-      --status-h: 34px;
-      --vh: 100dvh; /* updated dynamically via VisualViewport for mobile keyboards */
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --accent: #4f46e5; /* indigo-600 */
+      --accent-2: #22d3ee; /* cyan-400 */
+      --ok: #22c55e;      /* green-500 */
+      --warn: #f59e0b;    /* amber-500 */
+      --danger: #ef4444;  /* red-500 */
     }
-    html, body {
-      height:100%;
-      margin:0;
-      background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
-                  radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
-                  var(--bg);
-      color:var(--fg);
-      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      overscroll-behavior: contain; /* prevent pull-to-refresh while interacting */
-      -webkit-tap-highlight-color: transparent;
-    }
+    html, body { height:100%; margin:0; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
+                                          radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
+                                          var(--bg);
+      color:var(--fg); font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     /* Layout */
-    body { display:grid; grid-template-rows: auto auto 1fr; min-height: var(--vh); }
-
-    .bar {
-      height:var(--bar-h);
-      display:flex; align-items:center; gap:12px; padding:0 16px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-      border-bottom:1px solid var(--border); backdrop-filter: blur(6px);
-      position: sticky; top:0; z-index:10;
-    }
-    .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+    body { display:grid; grid-template-rows: auto auto 1fr; min-height: 100svh; overscroll-behavior: none; }
+    .bar { height:56px; display:flex; align-items:center; gap:12px; padding:0 16px; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border-bottom:1px solid var(--border); backdrop-filter: blur(6px); position: sticky; top:0; z-index:10; }
+    .brand { display:flex; align-items:center; gap:10px; }
     .logo { width:28px; height:28px; border-radius:8px; background: conic-gradient(from 210deg, var(--accent), var(--accent-2)); box-shadow: 0 0 0 1px #ffffff14 inset, 0 4px 20px #00000080; }
-    .title { font-weight:700; letter-spacing:.1px; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .subtitle { color:var(--muted); font-weight:500; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .title { font-weight:700; letter-spacing:.1px; font-size:15px; }
+    .subtitle { color:var(--muted); font-weight:500; font-size:12px; }
     .spacer { flex:1; }
 
     /* Buttons */
-    .btn {
-      border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
-      border-radius:12px; padding:10px 14px; cursor:pointer; font-size:14px;
-      display:inline-flex; align-items:center; gap:8px; transition:transform .08s ease, border-color .2s ease, background .2s ease;
-      touch-action: manipulation;
-    }
+    .btn { border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
+      border-radius:12px; padding:8px 12px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:8px; transition:transform .08s ease, border-color .2s ease, background .2s ease; }
     .btn:hover { border-color:#2a3547; background:linear-gradient(180deg, #172033, #111722); }
     .btn:active { transform: translateY(1px); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
@@ -75,47 +54,32 @@
     .dot.err { background: var(--danger); }
 
     /* Screen area */
-    #screen { min-height:0; position:relative; }
-    #screen > canvas {
-      width:100%;
-      height:calc(var(--vh) - var(--bar-h) - var(--status-h));
-      display:block; background:#000;
-      image-rendering: crisp-edges;
-      touch-action: none;           /* important: let noVNC handle gestures */
-      -ms-touch-action: none;
+    #screen { min-height:0; /* mobile: keep gestures for noVNC, not page */ touch-action: none; }
+    #screen > canvas { width:100%; height:calc(100svh - 56px - 34px); display:block; image-rendering: crisp-edges; background:#000; }
+    /* Prefer dynamic viewport height when supported (better with mobile keyboards) */
+    @supports (height: 100dvh) {
+      #screen > canvas { height: calc(100dvh - 56px - 34px); }
     }
 
     /* Toast */
-    .toast { position:fixed; right:16px; bottom:calc(16px + var(--safe-bottom)); background:#0b121b; border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px; z-index:20; }
+    .toast { position:fixed; right:16px; bottom:16px; background:#0b121b; border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px; }
     .toast .dot { box-shadow:none; }
 
-    /* --- MOBILE KEYBOARD STRIP --- */
-    .ime {
-      position:fixed; left:0; right:0;
-      bottom:0;
-      padding:8px 10px calc(8px + var(--safe-bottom));
-      background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-      border-top:1px solid var(--border);
-      display:none; gap:8px; align-items:center; z-index:15;
-      backdrop-filter: blur(6px);
-    }
-    .ime.show { display:flex; }
-    .ime textarea {
-      flex:1; min-height:40px; max-height:120px; resize:none; border:1px solid var(--border);
-      border-radius:10px; background:#0b121b; color:var(--fg); padding:10px 12px;
-      font: 16px ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      /* Prevent mobile autocorrect weirdness */
-      autocapitalize:none; -webkit-user-select:text;
-    }
-    .kbd-keys { display:flex; gap:6px; flex-wrap:wrap; }
-    .kbd {
-      border:1px solid var(--border); background:#0f141c; border-radius:10px; padding:8px 10px; font-size:13px;
-      min-width:44px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; user-select:none;
-    }
-    .kbd.toggle.on { border-color:#3b82f6; box-shadow:0 0 0 1px #3b82f6 inset; }
-    @media (max-width: 480px) {
-      .title { max-width: 38vw; }
-      .subtitle { display:none; }
+    /* --- Hidden mobile keyboard input (added) --- */
+    #vkbd {
+      position: fixed;
+      /* keep it offscreen & invisible but focusable */
+      top: -200px;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: transparent;
+      caret-color: transparent;
+      z-index: 1; /* under the toolbar */
     }
   </style>
 </head>
@@ -129,13 +93,6 @@
       </div>
     </div>
     <div class="spacer"></div>
-
-    <!-- New: Keyboard toggle for mobile -->
-    <button id="btn-kbd" class="btn" title="Show Keyboard (mobile)">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>
-      Keyboard
-    </button>
-
     <button id="btn-full" class="btn" title="Fullscreen (F)">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"/></svg>
       Fullscreen
@@ -155,29 +112,10 @@
     <span id="status-text">Connecting…</span>
   </div>
 
-  <div id="screen"></div>
+  <!-- Hidden, focusable input to summon the mobile keyboard (added) -->
+  <input id="vkbd" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" aria-hidden="true" />
 
-  <!-- Mobile IME/keys strip -->
-  <div id="ime" class="ime" aria-label="Mobile keyboard strip">
-    <textarea id="ime-input"
-      placeholder="Type here…"
-      autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-      enterkeyhint="enter"></textarea>
-    <div class="kbd-keys">
-      <button class="kbd" data-key="Esc">Esc</button>
-      <button class="kbd" data-key="Tab">Tab</button>
-      <button class="kbd" data-key="Backspace">⌫</button>
-      <button class="kbd" data-key="Enter">⏎</button>
-      <button class="kbd" data-key="Left">←</button>
-      <button class="kbd" data-key="Up">↑</button>
-      <button class="kbd" data-key="Down">↓</button>
-      <button class="kbd" data-key="Right">→</button>
-      <button class="kbd toggle" id="mod-ctrl">Ctrl</button>
-      <button class="kbd toggle" id="mod-alt">Alt</button>
-      <button class="kbd toggle" id="mod-shift">Shift</button>
-      <button class="kbd" id="cad">Ctrl+Alt+Del</button>
-    </div>
-  </div>
+  <div id="screen"></div>
 
   <div id="toast" class="toast" style="display:none">
     <span class="dot ok"></span>
@@ -188,10 +126,12 @@
   <script type="module">
   import RFB from './core/rfb.js';
 
-  // Run after DOM is ready
   const ready = (fn) => {
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
-    else fn();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fn, { once: true });
+    } else {
+      fn();
+    }
   };
 
   ready(() => {
@@ -205,31 +145,12 @@
     const btnFull      = document.querySelector('#btn-full');
     const btnDisc      = document.querySelector('#btn-disc');
     const btnShot      = document.querySelector('#btn-shot');
-    const btnKbd       = document.querySelector('#btn-kbd');
     const screen       = document.getElementById('screen');
-    const ime          = document.getElementById('ime');
-    const imeInput     = document.getElementById('ime-input');
-    const modCtrlBtn   = document.getElementById('mod-ctrl');
-    const modAltBtn    = document.getElementById('mod-alt');
-    const modShiftBtn  = document.getElementById('mod-shift');
-    const cadBtn       = document.getElementById('cad');
+    const vkbd         = document.getElementById('vkbd'); // (added)
 
     if (!screen) {
       console.error('[ui] #screen not found; aborting noVNC init');
       return;
-    }
-
-    // --- VisualViewport -> CSS var for correct height when keyboard shows ---
-    function setVH() {
-      const vv = window.visualViewport;
-      const vh = vv ? vv.height : window.innerHeight;
-      document.documentElement.style.setProperty('--vh', vh + 'px');
-    }
-    setVH();
-    window.addEventListener('resize', setVH);
-    if (window.visualViewport) {
-      visualViewport.addEventListener('resize', setVH);
-      visualViewport.addEventListener('scroll', setVH);
     }
 
     // ——— UI helpers ———
@@ -289,14 +210,9 @@
 
     // ——— Setup RFB ———
     const rfb = new RFB(screen, wsUrl, { credentials: {} });
-
-    // Mobile-friendly defaults
     rfb.viewOnly = false;
-    rfb.scaleViewport = true;   // scale to fit
-    rfb.clipViewport  = true;   // keep within view when zoomed
-    rfb.dragViewport  = true;   // two-finger drag to pan
-    // On mobile, avoid constantly resizing the remote desktop
-    rfb.resizeSession = !/Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent) ;
+    rfb.scaleViewport = true;
+    rfb.resizeSession = true;
 
     rfb.addEventListener('connect',   () => setStatus('Connected', 'ok'));
     rfb.addEventListener('disconnect', (e) => {
@@ -312,7 +228,7 @@
           if (!document.fullscreenElement) await el.requestFullscreen();
           else await document.exitFullscreen();
         } catch {}
-      }, { passive: true });
+      });
     }
 
     if (btnDisc) {
@@ -320,6 +236,7 @@
         setStatus('Disconnecting…', 'warn');
         btnDisc.disabled = true;
         try {
+          // Prefer POST; fall back to GET if server doesn’t accept it
           let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
           if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
         } catch {}
@@ -371,6 +288,8 @@
           `;
         }
       });
+    } else {
+      console.error('[ui] #btn-shot not found; snapshot disabled');
     }
 
     // ——— Hotkeys ———
@@ -381,136 +300,120 @@
       }
     });
 
-    // ——— MOBILE: IME & on-screen keys ———
-    const KS = { // X11 keysyms used by VNC
-      Backspace: 0xFF08, Tab: 0xFF09, Enter: 0xFF0D, Escape: 0xFF1B,
-      Shift_L: 0xFFE1, Control_L: 0xFFE3, Alt_L: 0xFFE9, Super_L: 0xFFEB,
-      Left: 0xFF51, Up: 0xFF52, Right: 0xFF53, Down: 0xFF54,
-      Delete: 0xFFFF
+    // ——— Mobile keyboard glue (added) ———
+    // Map a Unicode code point to an X11 keysym suitable for RFB
+    function unicodeToKeysym(ch) {
+      const cp = ch.codePointAt(0);
+      // Latin-1 range uses value directly; others set the high bit as per X11 convention
+      return (cp <= 0xFF) ? cp : (0x01000000 | cp);
+    }
+    // Common X11 keysyms
+    const KS = {
+      BackSpace: 0xFF08,
+      Tab:       0xFF09,
+      Return:    0xFF0D,
+      Escape:    0xFF1B,
+      Left:      0xFF51,
+      Up:        0xFF52,
+      Right:     0xFF53,
+      Down:      0xFF54,
+      PageUp:    0xFF55,
+      PageDown:  0xFF56,
+      End:       0xFF57,
+      Home:      0xFF50,
+      Insert:    0xFF63,
+      Delete:    0xFFFF,
     };
-
-    function sendKeysym(ksym, down = true) {
-      try { rfb.sendKey(ksym, undefined, down); } catch (e) { console.warn('sendKey failed', e); }
+    function sendKeysym(ks) {
+      try {
+        // press + release
+        rfb.sendKey(ks, null, true);
+        rfb.sendKey(ks, null, false);
+      } catch (e) {
+        // some builds accept single-call (fallback)
+        try { rfb.sendKey(ks); } catch {}
+      }
     }
-    function sendText(str) {
-      for (const ch of str) {
-        // For basic Latin, keysym == Unicode code point
-        sendKeysym(ch.codePointAt(0), true);
-        sendKeysym(ch.codePointAt(0), false);
+    function sendText(s) {
+      for (const ch of s) {
+        sendKeysym(unicodeToKeysym(ch));
       }
     }
 
-    // Sticky modifiers
-    const mods = { ctrl:false, alt:false, shift:false };
-    function applyModifiersDown() {
-      if (mods.ctrl)  sendKeysym(KS.Control_L, true);
-      if (mods.alt)   sendKeysym(KS.Alt_L, true);
-      if (mods.shift) sendKeysym(KS.Shift_L, true);
-    }
-    function releaseModifiers() {
-      if (mods.shift) sendKeysym(KS.Shift_L, false);
-      if (mods.alt)   sendKeysym(KS.Alt_L, false);
-      if (mods.ctrl)  sendKeysym(KS.Control_L, false);
-    }
-    function pulseWithMods(fn) {
-      applyModifiersDown();
-      fn();
-      releaseModifiers();
+    // Focus the hidden input on first tap to show the OS keyboard
+    function focusVKBD() {
+      if (!vkbd) return;
+      try { vkbd.focus({ preventScroll: true }); } catch { vkbd.focus(); }
     }
 
-    function toggleBtn(btn, key) {
-      mods[key] = !mods[key];
-      btn.classList.toggle('on', mods[key]);
-      if (mods[key]) {
-        // Press down immediately so next key affects remote instantly
-        if (key === 'ctrl')  sendKeysym(KS.Control_L, true);
-        if (key === 'alt')   sendKeysym(KS.Alt_L, true);
-        if (key === 'shift') sendKeysym(KS.Shift_L, true);
-      } else {
-        if (key === 'ctrl')  sendKeysym(KS.Control_L, false);
-        if (key === 'alt')   sendKeysym(KS.Alt_L, false);
-        if (key === 'shift') sendKeysym(KS.Shift_L, false);
-      }
-    }
+    if (vkbd) {
+      // When the user taps the VNC screen, show the keyboard
+      ['pointerdown','touchstart','mousedown'].forEach(evt => {
+        screen.addEventListener(evt, () => {
+          focusVKBD();
+        }, { passive: false });
+      });
 
-    // Show/hide IME strip
-    btnKbd?.addEventListener('click', () => {
-      const showing = ime.classList.toggle('show');
-      if (showing) {
-        imeInput.focus();
-        // Ensure the canvas height updates once keyboard slides in
-        setTimeout(setVH, 250);
-      } else {
-        imeInput.blur();
-        setTimeout(setVH, 100);
-      }
-    });
+      // Intercept special keys and navigation from the soft keyboard
+      vkbd.addEventListener('keydown', (e) => {
+        switch (e.key) {
+          case 'ArrowLeft':  sendKeysym(KS.Left); break;
+          case 'ArrowRight': sendKeysym(KS.Right); break;
+          case 'ArrowUp':    sendKeysym(KS.Up); break;
+          case 'ArrowDown':  sendKeysym(KS.Down); break;
+          case 'Backspace':  sendKeysym(KS.BackSpace); break;
+          case 'Delete':     sendKeysym(KS.Delete); break;
+          case 'Enter':      sendKeysym(KS.Return); break;
+          case 'Tab':        sendKeysym(KS.Tab); break;
+          case 'Escape':     sendKeysym(KS.Escape); break;
+          case 'Home':       sendKeysym(KS.Home); break;
+          case 'End':        sendKeysym(KS.End); break;
+          case 'PageUp':     sendKeysym(KS.PageUp); break;
+          case 'PageDown':   sendKeysym(KS.PageDown); break;
+          default:
+            // let normal text be handled in beforeinput/input
+            return;
+        }
+        e.preventDefault();
+      });
 
-    // Prevent the page from scrolling while user pans/zooms the remote desktop
-    screen.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+      // beforeinput gives us the text being inserted (Android/iOS)
+      vkbd.addEventListener('beforeinput', (e) => {
+        // Handle text and some editing commands
+        const t = e.inputType;
+        if (t === 'insertText' && e.data) {
+          sendText(e.data);
+        } else if (t === 'insertLineBreak') {
+          sendKeysym(KS.Return);
+        } else if (t === 'deleteContentBackward') {
+          sendKeysym(KS.BackSpace);
+        } else if (t === 'deleteContentForward') {
+          sendKeysym(KS.Delete);
+        }
+        // Keep input empty and prevent the browser from storing text
+        e.preventDefault();
+      });
 
-    // On-screen fixed keys
-    document.querySelectorAll('.kbd-keys .kbd[data-key]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const k = btn.getAttribute('data-key');
-        const simple = {
-          'Esc': KS.Escape, 'Tab': KS.Tab, 'Backspace': KS.Backspace, 'Enter': KS.Enter,
-          'Left': KS.Left, 'Up': KS.Up, 'Right': KS.Right, 'Down': KS.Down, 'Delete': KS.Delete
-        }[k];
-        if (simple) {
-          pulseWithMods(() => { sendKeysym(simple, true); sendKeysym(simple, false); });
+      // Fallback for keyboards that only emit "input"
+      vkbd.addEventListener('input', () => {
+        if (vkbd.value) {
+          sendText(vkbd.value);
+          vkbd.value = '';
         }
       });
-    });
 
-    modCtrlBtn?.addEventListener('click', () => toggleBtn(modCtrlBtn, 'ctrl'));
-    modAltBtn?.addEventListener('click', () => toggleBtn(modAltBtn, 'alt'));
-    modShiftBtn?.addEventListener('click', () => toggleBtn(modShiftBtn, 'shift'));
-
-    cadBtn?.addEventListener('click', () => {
-      try { rfb.sendCtrlAltDel(); } catch {}
-    });
-
-    // IME text -> VM (works with iOS/Android)
-    // We use beforeinput to capture operations like delete/enter reliably.
-    imeInput?.addEventListener('beforeinput', (e) => {
-      const type = e.inputType;
-      const data = e.data || '';
-      // Don’t actually keep text in the textarea (it’s a sink)
-      e.preventDefault();
-
-      if (type === 'insertText' && data) {
-        pulseWithMods(() => sendText(data));
-        return;
+      // Small hint on first touch devices
+      const isTouch = matchMedia('(pointer: coarse)').matches;
+      if (isTouch) {
+        setTimeout(() => toast('Tip: tap the screen to type', 'ok'), 400);
       }
-      if (type === 'insertLineBreak' || type === 'insertParagraph') {
-        pulseWithMods(() => { sendKeysym(KS.Enter, true); sendKeysym(KS.Enter, false); });
-        return;
-      }
-      if (type === 'deleteContentBackward') {
-        pulseWithMods(() => { sendKeysym(KS.Backspace, true); sendKeysym(KS.Backspace, false); });
-        return;
-      }
-      if (type === 'deleteContentForward') {
-        pulseWithMods(() => { sendKeysym(KS.Delete, true); sendKeysym(KS.Delete, false); });
-        return;
-      }
-      // Fallback: on some keyboards, we may get plain input
-      if (data) pulseWithMods(() => sendText(data));
-    });
-
-    // Some IMEs send committed text on compositionend
-    imeInput?.addEventListener('compositionend', (e) => {
-      const txt = e.data || '';
-      if (txt) pulseWithMods(() => sendText(txt));
-      // Clear sink
-      imeInput.value = '';
-    });
+    }
 
     // Kick off
     setStatus('Connecting…');
     loadOS();
   });
-  </script>
+</script>
+
 </body>
 </html>
