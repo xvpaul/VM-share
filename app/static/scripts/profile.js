@@ -218,9 +218,16 @@ function makeCard({ title, src }) {
 async function loadGrafanaPanels() {
   if (!paneGrafana) return;
   paneGrafana.innerHTML = '';
+
+  // Make Grafana tab scrollable
+  const scrollArea = document.createElement('div');
+  scrollArea.className = 'max-h-[80vh] overflow-y-auto'; // limit height, allow vertical scroll
+  paneGrafana.appendChild(scrollArea);
+
   const grid = document.createElement('div');
   grid.className = 'grid grid-cols-1 gap-4';
-  paneGrafana.appendChild(grid);
+  scrollArea.appendChild(grid);
+
   GRAFANA_IFRAMES.forEach(cfg => grid.appendChild(makeCard(cfg)));
 }
 
