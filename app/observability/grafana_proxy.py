@@ -1,91 +1,65 @@
 # /app/observability/grafana_proxy.py
 import os
-import time
 import logging
-from fastapi import APIRouter, HTTPException, Query, Response
-import httpx
-
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 logger.info("grafana_proxy: module loaded")
 
-@router.get("/grafana/panel.png")
-async def grafana_panel_png(
+# NOTE:
+# - We serve Grafana under /grafana via Nginx subpath.
+# - So the safest base for iframes is the SAME ORIGIN relative path '/grafana'.
+# - If you ever move Grafana elsewhere, set GRAFANA_IFRAME_BASE accordingly.
+IFRAME_BASE = os.getenv("GRAFANA_IFRAME_BASE", "/grafana").rstrip("/")
+
+@router.get("/grafana/panel_iframe_src")
+async def grafana_panel_iframe_src(
     uid: str = Query(..., description="Dashboard UID"),
     panelId: int = Query(..., description="Panel ID"),
     _from: str = Query("now-1h", alias="from"),
     to: str = Query("now"),
-    width: int = Query(1100),
-    height: int = Query(300),
+    refresh: str = Query("10s"),
     theme: str = Query("dark"),
-    orgId: int | None = Query(None, description="Optional Grafana org id"),
-    tz: str | None = Query(None),
+    orgId: int | None = Query(1, description="Grafana org id"),
+    kiosk: bool = Query(True, description="Hide Grafana chrome"),
 ):
-    base  = os.getenv("GRAFANA_BASE", "http://localhost:3000").rstrip("/")
-    token = os.getenv("GRAFANA_TOKEN", "glsa_7nvHWsRynyHsg71ITPmHs8vWC1uIqVZp_20231f01")
-
-    if not token:
-        logger.error("grafana_proxy: GRAFANA_TOKEN is not set")
-        raise HTTPException(500, "GRAFANA_TOKEN not configured on server")
-
-    url = f"{base}/render/d-solo/{uid}/_"  # slug can be anything
+    """
+    Returns a JSON object with the iframe src URL for a single-panel view.
+    This does NOT render an image. Frontend should use:
+      <iframe src={src} ...></iframe>
+    """
+    # Grafana solo panel path: /d-solo/:uid/:slug
+    # slug is cosmetic; 'view' is fine.
+    base = f"{IFRAME_BASE}/d-solo/{uid}/view"
     params = {
-        "panelId": panelId,
+        "panelId": str(panelId),
         "from": _from,
         "to": to,
-        "width": width,
-        "height": height,
+        "refresh": refresh,
         "theme": theme,
     }
     if orgId is not None:
-        params["orgId"] = orgId
-    if tz:
-        params["tz"] = tz
+        params["orgId"] = str(orgId)
+    if kiosk:
+        params["kiosk"] = ""  # presence-only flag
 
-    logger.info(
-        "grafana_proxy: render request base=%s uid=%s panelId=%s from=%s to=%s w=%s h=%s theme=%s orgId=%s tz=%s",
-        base, uid, panelId, _from, to, width, height, theme, orgId, tz
-    )
+    # Build query string manually to keep empty kiosk param
+    query = "&".join(f"{k}={v}" if v != "" else k for k, v in params.items())
+    src = f"{base}?{query}"
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "image/png,*/*;q=0.8",
-    }
+    logger.info("grafana_iframe_src: uid=%s panelId=%s src=%s", uid, panelId, src)
+    return JSONResponse({"src": src})
 
-    t0 = time.perf_counter()
-    try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            r = await client.get(url, params=params, headers=headers)
-    except httpx.RequestError as e:
-        dt = (time.perf_counter() - t0) * 1000
-        logger.exception("grafana_proxy: unreachable base=%s dur_ms=%.1f err=%s", base, dt, e)
-        raise HTTPException(502, f"Grafana unreachable: {e}") from e
-
-    dt = (time.perf_counter() - t0) * 1000
-    ct = (r.headers.get("content-type") or "").lower()
-    size = len(r.content or b"")
-
-    if r.status_code != 200 or "image" not in ct:
-        snippet = (r.text or "")[:200]
-        logger.warning(
-            "grafana_proxy: render failed status=%s ct=%s bytes=%s dur_ms=%.1f url=%s params=%s snippet=%r",
-            r.status_code, ct, size, dt, url, params, snippet
-        )
-        raise HTTPException(502, f"Grafana render failed {r.status_code}: {snippet}")
-
-    logger.info(
-        "grafana_proxy: render ok status=%s bytes=%s dur_ms=%.1f uid=%s panelId=%s",
-        r.status_code, size, dt, uid, panelId
-    )
-
-    return Response(
-        r.content,
-        media_type="image/png",
-        headers={
-            "Cache-Control": "no-store",
-            "X-Grafana-Status": str(r.status_code),
-            "X-Render-Duration-ms": f"{dt:.1f}",
-        },
+# --- DEPRECATED: old PNG endpoint (renderer) ---
+@router.get("/grafana/panel.png")
+async def grafana_panel_png_deprecated():
+    """
+    Deprecated. We no longer render PNGs (headless Chromium).
+    """
+    # 410 Gone tells clients this resource is intentionally removed.
+    return PlainTextResponse(
+        "PNG rendering is deprecated. Use /grafana/panel_iframe_src and an <iframe> instead.",
+        status_code=410,
     )
