@@ -291,8 +291,15 @@
             if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
           } catch {}
           try { rfb.disconnect(); } catch {}
-          toast('Disconnected', 'warn');
-          btnDisc.disabled = false;
+
+          // Optional: show a toast briefly (won't be seen if redirect is immediate)
+          // toast('Disconnected', 'warn');
+
+          // Redirect to vmshare.ru (use replace() if you don't want back button to return)
+          setTimeout(() => {
+            window.location.assign('https://vmshare.ru');
+            // window.location.replace('https://vmshare.ru'); // <- prevents going back
+          }, 150);
         });
       }
 
