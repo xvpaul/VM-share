@@ -199,12 +199,12 @@ const GRAFANA_IFRAMES = [
 
 function makeCard({ title, src }) {
   const card = document.createElement('div');
-  card.className = 'bg-white/5 rounded-xl p-3 shadow';
+  card.className = 'bg-white/5 rounded-xl p-3 shadow mb-4'; // add spacing
   card.innerHTML = `
     <div class="flex items-center justify-between mb-2">
       <h4 class="font-medium">${title}</h4>
     </div>
-    <div class="w-full aspect-[16/9]">
+    <div class="w-full h-48">  <!-- fixed height for sidebar panels -->
       <iframe
         class="w-full h-full rounded-md border-0"
         loading="lazy"
@@ -218,10 +218,15 @@ function makeCard({ title, src }) {
 async function loadGrafanaPanels() {
   if (!paneGrafana) return;
   paneGrafana.innerHTML = '';
-  const grid = document.createElement('div');
-  grid.className = 'grid grid-cols-1 gap-4';
-  paneGrafana.appendChild(grid);
-  GRAFANA_IFRAMES.forEach(cfg => grid.appendChild(makeCard(cfg)));
+
+  // Sidebar wrapper: fixed width, scrollable
+  const sidebar = document.createElement('div');
+  sidebar.className = 'w-80 max-h-[80vh] overflow-y-auto pr-2'; 
+  // w-80 ~ 20rem wide, adjust as you like
+  // max-h-[80vh] keeps it from filling whole screen, allows scroll
+  paneGrafana.appendChild(sidebar);
+
+  GRAFANA_IFRAMES.forEach(cfg => sidebar.appendChild(makeCard(cfg)));
 }
 
 // Hook into your tab logic
@@ -230,68 +235,6 @@ tabGrafana?.addEventListener('click', () => {
   loadGrafanaPanels();
 });
 
-
-// --- App Metrics (no Prometheus needed) ---
-function makeAppTable(families) {
-  const table = document.createElement('table');
-  table.className = 'w-full text-sm';
-  table.innerHTML = `
-    <thead>
-      <tr class="bg-white/5">
-        <th class="text-left px-3 py-2">Family</th>
-        <th class="text-left px-3 py-2">Type</th>
-        <th class="text-left px-3 py-2">Sample</th>
-        <th class="text-left px-3 py-2">Labels</th>
-        <th class="text-left px-3 py-2">Value</th>
-        <th class="text-left px-3 py-2">Timestamp</th>
-      </tr>
-    </thead>
-    <tbody></tbody>`;
-  const tbody = table.querySelector('tbody');
-  families.forEach(f => {
-    (f.samples || []).forEach(s => {
-      const labels = Object.entries(s.labels || {}).map(([k, v]) => `${k}="${v}"`).join(', ');
-      const tr = document.createElement('tr');
-      tr.className = 'odd:bg-white/0 even:bg-white/5';
-      tr.innerHTML = `
-        <td class="px-3 py-2 whitespace-nowrap">${f.name}</td>
-        <td class="px-3 py-2">${f.type}</td>
-        <td class="px-3 py-2 whitespace-nowrap">${s.name}</td>
-        <td class="px-3 py-2 text-neutral-300">${labels}</td>
-        <td class="px-3 py-2">${s.value}</td>
-        <td class="px-3 py-2">${s.timestamp ? new Date(s.timestamp * 1000).toLocaleString() : ''}</td>`;
-      tbody.appendChild(tr);
-    });
-  });
-  return table;
-}
-
-async function fetchAppMetrics() {
-  if(!appStatus || !appResults) return;
-  appStatus.textContent = 'Fetching…';
-  appResults.innerHTML = '';
-  try {
-    const res = await fetch(APP_JSON, { credentials: 'same-origin' });
-    const data = await res.json();
-    if (data.status !== 'success') throw new Error('Unexpected response');
-    const families = data.data || [];
-
-    // NEW: update the KPI number
-    const active = extractActiveVms(families, CURRENT_USER?.id);
-    const kpi = document.getElementById('active-vms');
-    if (kpi) kpi.textContent = (active ?? 0).toString();
-
-    // existing table render
-    appStatus.textContent = `${families.length} metric families`;
-    appResults.appendChild(makeAppTable(families));
-  } catch (err) {
-    appStatus.textContent = `Request failed: ${err.message}`;
-    const kpi = document.getElementById('active-vms');
-    if (kpi) kpi.textContent = '0';
-  }
-}
-
-appRefresh?.addEventListener('click', fetchAppMetrics);
 
 // --- Prometheus (unchanged) ---
 function makePromTable(result) {
