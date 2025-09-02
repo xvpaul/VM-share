@@ -181,7 +181,7 @@ function ensureFeedbackModal() {
         </div>
 
         <label for="feedback-text" class="sr-only">Your feedback</label>
-        <textarea id="feedback-text" rows="5" placeholder="Tell me about bugs you found, your experience using the app, or anything else you’d like to share..."
+        <textarea id="feedback-text" rows="5" placeholder="Tell me about bugs you found, your experience using the app, or anything related..."
           class="w-full rounded-xl border border-white/15 bg-neutral-950/90 px-4 py-3 text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-white/20"></textarea>
 
         <div class="mt-2 flex items-center justify-between text-xs text-white/50">
