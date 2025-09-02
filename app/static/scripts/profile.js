@@ -181,75 +181,68 @@ activate('app'); // default tab
 
 // --- Grafana integration ---
 const GRAFANA_PROXY = '/grafana/panel.png';
+// --- Grafana integration via IFRAMES (no PNG rendering) ---
 
-// --- Grafana integration (iframes, no Chromium) ---
-
-// Reverse-proxied Grafana base (adjust if yours differs)
+// Use your subpath proxy:
 const GRAFANA_BASE = '/grafana';
 
-// Panels to show (dashboard UID + panelId + title)
+// Panels you want to show
 const GRAFANA_PANELS = [
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 4, title: 'Request rate (rps, 1m)' },
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 2, title: 'User-count' },
   { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 1, title: 'Active-sessions (3h)' },
 ];
 
-// Default time range + auto-refresh (handled by Grafana in the iframe URL)
-let grafanaRange = { from: 'now-1h', to: 'now' };
-let grafanaTimer = null; // kept for compatibility with your modal/tab cleanup hooks
-function clearGrafanaTimer() { if (grafanaTimer) { clearInterval(grafanaTimer); grafanaTimer = null; } }
-
-function urlFor({ uid, panelId }) {
-  // d-solo = single panel view; add kiosk for a chrome-free embed
+// Build the FULL iframe URL. Important: includes /d-solo/<uid>/<slug>
+function urlFor({ uid, panelId, from = 'now-1h', to = 'now' }) {
   const params = new URLSearchParams({
     orgId: '1',
     panelId: String(panelId),
-    from: grafanaRange.from,
-    to: grafanaRange.to,
-    refresh: '10s',          // adjust to 30s/60s if you prefer
-    theme: 'dark',           // or 'light'
-    kiosk: '',               // presence is enough
+    from,
+    to,
+    refresh: '10s',
+    theme: 'dark',
+    kiosk: '', // presence-only
   });
-  // Optional: if your Grafana is mounted at root rather than /grafana, drop the prefix
-  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/_?${params.toString()}`;
+  // slug can be any word; 'view' is fine
+  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/view?${params.toString()}`;
 }
 
-function makeCard(title, src) {
+// Create a card with an IFRAME (not <img>)
+function makeCard(title, src, rangeText = 'now-1h → now') {
   const card = document.createElement('div');
   card.className = 'bg-white/5 rounded-xl p-3 shadow';
-
   card.innerHTML = `
     <div class="flex items-center justify-between mb-2">
       <h4 class="font-medium">${title}</h4>
-      <span class="text-xs text-neutral-300">${grafanaRange.from} → ${grafanaRange.to}</span>
+      <span class="text-xs text-neutral-300">${rangeText}</span>
     </div>
     <div class="w-full aspect-[16/9]">
       <iframe class="w-full h-full rounded-md border-0" loading="lazy" referrerpolicy="no-referrer"></iframe>
     </div>
   `;
-
   card.querySelector('iframe').src = src;
   return card;
 }
 
 async function loadGrafanaPanels() {
   if (!paneGrafana) return;
-  clearGrafanaTimer(); // no-op now, but keeps your existing cleanup calls safe
-
   paneGrafana.innerHTML = '';
   const grid = document.createElement('div');
   grid.className = 'grid grid-cols-1 gap-4';
   paneGrafana.appendChild(grid);
 
-  GRAFANA_PANELS.forEach(p => grid.appendChild(makeCard(p.title, urlFor(p))));
+  GRAFANA_PANELS.forEach(p => {
+    const src = urlFor(p);
+    // quick debug: ensure it starts with /grafana/d-solo/
+    // console.log('IFRAME SRC:', src);
+    grid.appendChild(makeCard(p.title, src));
+  });
 }
 
-// Kill any (legacy) timers when modal closes or on ESC (kept from your original)
-modal?.addEventListener('click', (e) => { if (e.target === modal) { clearGrafanaTimer(); } });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearGrafanaTimer(); });
-
-// Load on tab click (as you already do elsewhere)
+// Hook to your existing tab
 tabGrafana?.addEventListener('click', () => { activate('grafana'); loadGrafanaPanels(); });
+
 
 
 
