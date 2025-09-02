@@ -14,6 +14,41 @@
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="static/css/index.css" />
+  <style>
+    /* Mobile polish */
+    :root { --ring: 255 255 255 / .12; }
+
+    /* Smooth scroll & snapping for the OS carousel */
+    .snap-x { scroll-snap-type: x mandatory; }
+    .snap-start { scroll-snap-align: start; }
+
+    /* Hide scrollbars on mobile while keeping scrollable */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Fancy card outline (subtle) */
+    .glass {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }
+
+    /* Inputs/buttons */
+    .input {
+      @apply w-full rounded-xl bg-white/5 placeholder-white/50 outline-none ring-1 ring-white/10 focus:ring-white/30;
+    }
+    .submit-btn {
+      @apply rounded-xl bg-fuchsia-600/80 hover:bg-fuchsia-600 transition-colors font-semibold;
+    }
+
+    /* Grain background relies on your existing .grain-bg class in index.css */
+
+    /* Auth modal max width for small phones */
+    @media (max-width: 420px) {
+      #auth-card { width: 92vw; padding: 1.25rem; }
+    }
+  </style>
 </head>
 
 <body class="bg-neutral-950 text-white min-h-screen flex flex-col grain-bg font-[Inter]">
