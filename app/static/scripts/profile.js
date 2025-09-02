@@ -179,38 +179,39 @@ tabProm?.addEventListener('click', () => activate('prom'));
 tabApp?.addEventListener('click', () => { activate('app'); fetchAppMetrics(); });
 activate('app'); // default tab
 
-// --- Grafana integration ---
-const GRAFANA_PROXY = '/grafana/panel.png';
-// --- Grafana IFRAMES (fixed: no redirect spam) ---
-const GRAFANA_BASE = '/grafana';
-const SLUG = 'system-metrics'; // <-- real slug from your dashboard URL
+// --- Grafana integration using static iframes ---
 
-function urlFor({ uid, panelId, from='now-1h', to='now' }) {
-  const p = new URLSearchParams({ orgId:'1', panelId:String(panelId), from, to, theme:'dark' });
-  const qs = p.toString() + '&kiosk';  // presence-only
-  return `${GRAFANA_BASE}/d-solo/${encodeURIComponent(uid)}/${encodeURIComponent(SLUG)}?${qs}`;
-}
-
-
-const GRAFANA_PANELS = [
-  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 4, title: 'Request rate (rps, 1m)' },
-  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 2, title: 'User-count' },
-  { uid: '051610f9-e0cf-4fbe-ab97-1ac1644e02a5', panelId: 1, title: 'Active-sessions (3h)' },
+// Hard-coded iframe URLs copied from Grafana "Share → Embed"
+const GRAFANA_IFRAMES = [
+  {
+    title: 'Request rate (rps, 1m)',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=4&theme=dark&kiosk'
+  },
+  {
+    title: 'User-count',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=2&theme=dark&kiosk'
+  },
+  {
+    title: 'Active-sessions (3h)',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=1&theme=dark&kiosk'
+  }
 ];
 
-function makeCard(title, src) {
+function makeCard({ title, src }) {
   const card = document.createElement('div');
   card.className = 'bg-white/5 rounded-xl p-3 shadow';
   card.innerHTML = `
     <div class="flex items-center justify-between mb-2">
       <h4 class="font-medium">${title}</h4>
-      <span class="text-xs text-neutral-300">now-1h → now</span>
     </div>
     <div class="w-full aspect-[16/9]">
-      <iframe class="w-full h-full rounded-md border-0" loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <iframe
+        class="w-full h-full rounded-md border-0"
+        loading="lazy"
+        src="${src}">
+      </iframe>
     </div>
   `;
-  card.querySelector('iframe').src = src;
   return card;
 }
 
@@ -220,12 +221,14 @@ async function loadGrafanaPanels() {
   const grid = document.createElement('div');
   grid.className = 'grid grid-cols-1 gap-4';
   paneGrafana.appendChild(grid);
-  GRAFANA_PANELS.forEach(p => grid.appendChild(makeCard(p.title, urlFor(p))));
+  GRAFANA_IFRAMES.forEach(cfg => grid.appendChild(makeCard(cfg)));
 }
 
-tabGrafana?.addEventListener('click', () => { activate('grafana'); loadGrafanaPanels(); });
-
-
+// Hook into your tab logic
+tabGrafana?.addEventListener('click', () => {
+  activate('grafana');
+  loadGrafanaPanels();
+});
 
 
 // --- App Metrics (no Prometheus needed) ---
