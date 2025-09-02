@@ -184,7 +184,7 @@ activate('app'); // default tab
 // Hard-coded iframe URLs copied from Grafana "Share → Embed"
 const GRAFANA_IFRAMES = [
   {
-    title: 'Request rate (rps, 1m)',
+    title: 'Request rate',
     src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=4&theme=dark&kiosk'
   },
   {
@@ -194,8 +194,17 @@ const GRAFANA_IFRAMES = [
   {
     title: 'Active-sessions (3h)',
     src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-1h&to=now&timezone=browser&panelId=1&theme=dark&kiosk'
+  },
+  {
+    title: 'RAM',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=1756754919372&to=1756776519372&timezone=browser&panelId=7&theme=dark&kiosk'
+  },
+  {
+    title: 'CPU',
+    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=1756754919372&to=1756776519372&timezone=browser&panelId=5&theme=dark&kiosk'
   }
 ];
+
 
 function makeCard({ title, src }) {
   const card = document.createElement('div');
