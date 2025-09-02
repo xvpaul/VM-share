@@ -1,5 +1,5 @@
 # /app/routers/post.py
-import logging
+import logging, html
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -11,6 +11,8 @@ from methods.database.database import get_db
 from methods.auth.auth import get_current_user
 from methods.database.models import User
 from methods.manager.SessionManager import get_session_store, SessionStore
+
+from observability.report import telegram_reporting
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -113,10 +115,28 @@ async def send_post(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/api/post")
+
+@router.post("/feedback")
 async def send_post(
+    data: dict,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    store: SessionStore = Depends(get_session_store),
-    text: Text = Text(...)
-): ...
+):
+    # Accept either {"message": "..."} or {"text": "..."}
+    msg = (data.get("message") or data.get("text") or "").strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="Message required")
+
+    # Minimal user info (best-effort)
+    name = getattr(user, "username", None) or getattr(user, "login", None) or getattr(user, "email", None) or "user"
+    uid  = getattr(user, "id", None) or getattr(user, "user_id", None) or ""
+
+    # Escape for Telegram HTML
+    safe_name = html.escape(str(name))
+    safe_uid  = html.escape(str(uid))
+    safe_msg  = html.escape(msg)
+
+    telegram_reporting(
+        f"<b>Feedback</b>\n<b>User:</b> {safe_name} (id: {safe_uid})\n\n{safe_msg}"
+    )
+
+    return {"ok": True}
