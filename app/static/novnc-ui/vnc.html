@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- Added viewport-fit for notches; left user zoom behavior unchanged -->
+  <!-- dynamic viewport for better behavior with soft keyboards + notches -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Loading OS…</title>
   <style>
@@ -19,14 +19,30 @@
       --warn: #f59e0b;    /* amber-500 */
       --danger: #ef4444;  /* red-500 */
     }
-    html, body { height:100%; margin:0; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
-                                          radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
-                                          var(--bg);
-      color:var(--fg); font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html, body {
+      height:100%;
+      margin:0;
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.12), transparent),
+                  radial-gradient(1200px 700px at 110% 10%, rgba(34,211,238,.10), transparent),
+                  var(--bg);
+      color:var(--fg);
+      font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
     /* Layout */
-    body { display:grid; grid-template-rows: auto auto 1fr; min-height: 100svh; overscroll-behavior: none; }
-    .bar { height:56px; display:flex; align-items:center; gap:12px; padding:0 16px; background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-      border-bottom:1px solid var(--border); backdrop-filter: blur(6px); position: sticky; top:0; z-index:10; }
+    body {
+      display:grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 100svh;
+      overscroll-behavior: none; /* avoid rubber-banding while dragging in VNC */
+    }
+    .bar {
+      height:56px; display:flex; align-items:center; gap:12px; padding:0 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border-bottom:1px solid var(--border);
+      backdrop-filter: blur(6px);
+      position: sticky; top:0; z-index:10;
+    }
     .brand { display:flex; align-items:center; gap:10px; }
     .logo { width:28px; height:28px; border-radius:8px; background: conic-gradient(from 210deg, var(--accent), var(--accent-2)); box-shadow: 0 0 0 1px #ffffff14 inset, 0 4px 20px #00000080; }
     .title { font-weight:700; letter-spacing:.1px; font-size:15px; }
@@ -34,8 +50,11 @@
     .spacer { flex:1; }
 
     /* Buttons */
-    .btn { border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
-      border-radius:12px; padding:8px 12px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:8px; transition:transform .08s ease, border-color .2s ease, background .2s ease; }
+    .btn {
+      border:1px solid var(--border); background:linear-gradient(180deg, #151c28, #111722); color:var(--fg);
+      border-radius:12px; padding:8px 12px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:8px;
+      transition:transform .08s ease, border-color .2s ease, background .2s ease;
+    }
     .btn:hover { border-color:#2a3547; background:linear-gradient(180deg, #172033, #111722); }
     .btn:active { transform: translateY(1px); }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
@@ -47,39 +66,45 @@
     .icon { width:16px; height:16px; display:inline-block; }
 
     /* Status strip */
-    .status { font-size:12px; color:var(--muted); padding:8px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background: var(--panel-2); }
+    .status {
+      font-size:12px; color:var(--muted); padding:8px 16px; display:flex; align-items:center; gap:8px;
+      border-bottom:1px solid var(--border); background: var(--panel-2);
+    }
     .dot { width:8px; height:8px; border-radius:999px; background:#6b7280; box-shadow:0 0 0 2px #00000055; }
     .dot.ok { background: var(--ok); }
     .dot.warn { background: var(--warn); }
     .dot.err { background: var(--danger); }
 
     /* Screen area */
-    #screen { min-height:0; /* mobile: keep gestures for noVNC, not page */ touch-action: none; }
-    #screen > canvas { width:100%; height:calc(100svh - 56px - 34px); display:block; image-rendering: crisp-edges; background:#000; }
-    /* Prefer dynamic viewport height when supported (better with mobile keyboards) */
+    #screen { min-height:0; }
+    /* critical for touch: let noVNC get gestures, not the browser */
+    #screen, #screen canvas { touch-action: none; }
+    #screen > canvas {
+      width:100%;
+      height:calc(100svh - 56px - 34px);
+      display:block;
+      image-rendering: crisp-edges;
+      background:#000;
+    }
     @supports (height: 100dvh) {
       #screen > canvas { height: calc(100dvh - 56px - 34px); }
     }
 
     /* Toast */
-    .toast { position:fixed; right:16px; bottom:16px; background:#0b121b; border:1px solid var(--border); padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px; }
+    .toast {
+      position:fixed; right:16px; bottom:16px; background:#0b121b; border:1px solid var(--border);
+      padding:12px 14px; border-radius:12px; box-shadow:0 8px 30px #0008; display:flex; align-items:center; gap:10px; font-size:13px;
+    }
     .toast .dot { box-shadow:none; }
 
-    /* --- Hidden mobile keyboard input (added) --- */
-    #vkbd {
-      position: fixed;
-      /* keep it offscreen & invisible but focusable */
-      top: -200px;
-      left: 0;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      border: 0;
-      padding: 0;
+    /* Hidden-but-focusable input that summons mobile soft keyboard */
+    #vkbd{
+      position: fixed; bottom: 0; left: 0;
+      width: 1px; height: 1px;
+      opacity: 0; border: 0; padding: 0;
       background: transparent;
-      color: transparent;
-      caret-color: transparent;
-      z-index: 1; /* under the toolbar */
+      color: transparent; caret-color: transparent;
+      z-index: 1; /* under toolbar; in-viewport so iOS/Android will show keyboard */
     }
   </style>
 </head>
@@ -112,8 +137,11 @@
     <span id="status-text">Connecting…</span>
   </div>
 
-  <!-- Hidden, focusable input to summon the mobile keyboard (added) -->
-  <input id="vkbd" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" aria-hidden="true" />
+  <!-- Focusable input to summon the mobile keyboard -->
+  <input id="vkbd"
+    inputmode="text" enterkeyhint="enter"
+    autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"
+    aria-hidden="true" />
 
   <div id="screen"></div>
 
@@ -122,264 +150,242 @@
     <span id="toast-text">Done</span>
   </div>
 
-  <!-- noVNC core library you copied -->
+  <!-- noVNC core -->
   <script type="module">
-  import RFB from './core/rfb.js';
+    import RFB from './core/rfb.js';
 
-  const ready = (fn) => {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', fn, { once: true });
-    } else {
-      fn();
-    }
-  };
-
-  ready(() => {
-    // ——— Cache elements ———
-    const dotEl        = document.querySelector('#dot');
-    const statusTextEl = document.querySelector('#status-text');
-    const vmNameEl     = document.querySelector('#vm-name');
-    const vmSubEl      = document.querySelector('#vm-sub');
-    const toastEl      = document.querySelector('#toast');
-    const toastTextEl  = document.querySelector('#toast-text');
-    const btnFull      = document.querySelector('#btn-full');
-    const btnDisc      = document.querySelector('#btn-disc');
-    const btnShot      = document.querySelector('#btn-shot');
-    const screen       = document.getElementById('screen');
-    const vkbd         = document.getElementById('vkbd'); // (added)
-
-    if (!screen) {
-      console.error('[ui] #screen not found; aborting noVNC init');
-      return;
-    }
-
-    // ——— UI helpers ———
-    function setStatus(text, level = 'info') {
-      if (statusTextEl) statusTextEl.textContent = text;
-      if (!dotEl) return;
-      dotEl.classList.remove('ok', 'warn', 'err');
-      if (level === 'ok') dotEl.classList.add('ok');
-      else if (level === 'warn') dotEl.classList.add('warn');
-      else if (level === 'err') dotEl.classList.add('err');
-    }
-
-    let toastTimer;
-    function toast(text, level = 'ok') {
-      if (!toastEl || !toastTextEl) return;
-      toastTextEl.textContent = text;
-      const dot = toastEl.querySelector('.dot');
-      if (dot) dot.className = 'dot ' + (level === 'ok' ? 'ok' : level === 'err' ? 'err' : 'warn');
-      toastEl.style.display = 'flex';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, 2600);
-    }
-
-    // ——— Dynamic title/OS from /user_info ———
-    let currentOsType = null;
-
-    async function loadOS() {
-      try {
-        const res = await fetch('/auth/user_info', { credentials: 'same-origin' });
-        const ct = res.headers.get('content-type') || '';
-        let os = '';
-        if (ct.includes('application/json')) {
-          const j = await res.json();
-          os = j.os_type;
-        } else {
-          os = (await res.text()).trim();
-        }
-        if (!os) os = 'Virtual Machine';
-        currentOsType = os;
-        document.title = os + ' — Console';
-        if (vmNameEl) vmNameEl.textContent = os;
-        if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
-      } catch {
-        document.title = 'Console';
-        if (vmNameEl) vmNameEl.textContent = 'Console';
-        if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
+    const ready = (fn) => {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fn, { once: true });
+      } else {
+        fn();
       }
-    }
-
-    // ——— Build websocket URL ———
-    const urlParams = new URLSearchParams(window.location.search);
-    const host  = urlParams.get('host') || window.location.hostname || 'localhost';
-    const port  = urlParams.get('port') || window.location.port || (location.protocol === 'https:' ? '443' : '80');
-    const path  = urlParams.get('path') || 'websockify';
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${host}:${port}/${path}`;
-
-    // ——— Setup RFB ———
-    const rfb = new RFB(screen, wsUrl, { credentials: {} });
-    rfb.viewOnly = false;
-    rfb.scaleViewport = true;
-    rfb.resizeSession = true;
-
-    rfb.addEventListener('connect',   () => setStatus('Connected', 'ok'));
-    rfb.addEventListener('disconnect', (e) => {
-      const clean = !e || !e.detail || e.detail.clean;
-      setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
-    });
-
-    // ——— Controls ———
-    if (btnFull) {
-      btnFull.addEventListener('click', async () => {
-        const el = document.documentElement;
-        try {
-          if (!document.fullscreenElement) await el.requestFullscreen();
-          else await document.exitFullscreen();
-        } catch {}
-      });
-    }
-
-    if (btnDisc) {
-      btnDisc.addEventListener('click', async () => {
-        setStatus('Disconnecting…', 'warn');
-        btnDisc.disabled = true;
-        try {
-          // Prefer POST; fall back to GET if server doesn’t accept it
-          let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
-          if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
-        } catch {}
-        try { rfb.disconnect(); } catch {}
-        toast('Disconnected', 'warn');
-        btnDisc.disabled = false;
-      });
-    }
-
-    if (btnShot) {
-      btnShot.addEventListener('click', async () => {
-        btnShot.disabled = true;
-        btnShot.textContent = 'Snapshotting…';
-        try {
-          const osType = currentOsType || 'unknown';
-          const res = await fetch('/vm/snapshot', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ os_type: osType })
-          });
-
-          let msg = res.ok ? 'Snapshot created' : 'Snapshot failed';
-          try {
-            const ct = res.headers.get('content-type') || '';
-            if (ct.includes('application/json')) {
-              const data = await res.json();
-              const id = data.id || data.name || data.snapshot || '';
-              if (id) msg = `Snapshot ${id} created`;
-            } else {
-              const t = (await res.text()).trim();
-              if (t) msg = t;
-            }
-          } catch {}
-
-          toast(msg, res.ok ? 'ok' : 'err');
-          setStatus('Connected', res.ok ? 'ok' : 'err');
-        } catch (e) {
-          console.error('[snapshot] fetch failed:', e);
-          toast('Snapshot request failed', 'err');
-          setStatus('Connected', 'err');
-        } finally {
-          btnShot.disabled = false;
-          btnShot.innerHTML = `
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 7h4l2-2h4l2 2h4v12H4z"/>
-              <circle cx="12" cy="13" r="3"/>
-            </svg> Snapshot
-          `;
-        }
-      });
-    } else {
-      console.error('[ui] #btn-shot not found; snapshot disabled');
-    }
-
-    // ——— Hotkeys ———
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'f' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        btnFull?.click();
-      }
-    });
-
-    // ——— Mobile keyboard glue (added) ———
-    // Map a Unicode code point to an X11 keysym suitable for RFB
-    function unicodeToKeysym(ch) {
-      const cp = ch.codePointAt(0);
-      // Latin-1 range uses value directly; others set the high bit as per X11 convention
-      return (cp <= 0xFF) ? cp : (0x01000000 | cp);
-    }
-    // Common X11 keysyms
-    const KS = {
-      BackSpace: 0xFF08,
-      Tab:       0xFF09,
-      Return:    0xFF0D,
-      Escape:    0xFF1B,
-      Left:      0xFF51,
-      Up:        0xFF52,
-      Right:     0xFF53,
-      Down:      0xFF54,
-      PageUp:    0xFF55,
-      PageDown:  0xFF56,
-      End:       0xFF57,
-      Home:      0xFF50,
-      Insert:    0xFF63,
-      Delete:    0xFFFF,
     };
-    function sendKeysym(ks) {
-      try {
-        // press + release
-        rfb.sendKey(ks, null, true);
-        rfb.sendKey(ks, null, false);
-      } catch (e) {
-        // some builds accept single-call (fallback)
-        try { rfb.sendKey(ks); } catch {}
+
+    ready(() => {
+      // ——— Cache elements ———
+      const dotEl        = document.querySelector('#dot');
+      const statusTextEl = document.querySelector('#status-text');
+      const vmNameEl     = document.querySelector('#vm-name');
+      const vmSubEl      = document.querySelector('#vm-sub');
+      const toastEl      = document.querySelector('#toast');
+      const toastTextEl  = document.querySelector('#toast-text');
+      const btnFull      = document.querySelector('#btn-full');
+      const btnDisc      = document.querySelector('#btn-disc');
+      const btnShot      = document.querySelector('#btn-shot');
+      const screen       = document.getElementById('screen');
+      const vkbd         = document.getElementById('vkbd');
+
+      if (!screen) {
+        console.error('[ui] #screen not found; aborting noVNC init');
+        return;
       }
-    }
-    function sendText(s) {
-      for (const ch of s) {
-        sendKeysym(unicodeToKeysym(ch));
+
+      // ——— UI helpers ———
+      function setStatus(text, level = 'info') {
+        if (statusTextEl) statusTextEl.textContent = text;
+        if (!dotEl) return;
+        dotEl.classList.remove('ok', 'warn', 'err');
+        if (level === 'ok') dotEl.classList.add('ok');
+        else if (level === 'warn') dotEl.classList.add('warn');
+        else if (level === 'err') dotEl.classList.add('err');
       }
-    }
 
-    // Focus the hidden input on first tap to show the OS keyboard
-    function focusVKBD() {
-      if (!vkbd) return;
-      try { vkbd.focus({ preventScroll: true }); } catch { vkbd.focus(); }
-    }
+      let toastTimer;
+      function toast(text, level = 'ok') {
+        if (!toastEl || !toastTextEl) return;
+        toastTextEl.textContent = text;
+        const dot = toastEl.querySelector('.dot');
+        if (dot) dot.className = 'dot ' + (level === 'ok' ? 'ok' : level === 'err' ? 'err' : 'warn');
+        toastEl.style.display = 'flex';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, 2600);
+      }
 
-    if (vkbd) {
-      // When the user taps the VNC screen, show the keyboard
-      ['pointerdown','touchstart','mousedown'].forEach(evt => {
-        screen.addEventListener(evt, () => {
-          focusVKBD();
-        }, { passive: false });
-      });
+      // ——— Dynamic title/OS from /user_info ———
+      let currentOsType = null;
 
-      // Intercept special keys and navigation from the soft keyboard
-      vkbd.addEventListener('keydown', (e) => {
-        switch (e.key) {
-          case 'ArrowLeft':  sendKeysym(KS.Left); break;
-          case 'ArrowRight': sendKeysym(KS.Right); break;
-          case 'ArrowUp':    sendKeysym(KS.Up); break;
-          case 'ArrowDown':  sendKeysym(KS.Down); break;
-          case 'Backspace':  sendKeysym(KS.BackSpace); break;
-          case 'Delete':     sendKeysym(KS.Delete); break;
-          case 'Enter':      sendKeysym(KS.Return); break;
-          case 'Tab':        sendKeysym(KS.Tab); break;
-          case 'Escape':     sendKeysym(KS.Escape); break;
-          case 'Home':       sendKeysym(KS.Home); break;
-          case 'End':        sendKeysym(KS.End); break;
-          case 'PageUp':     sendKeysym(KS.PageUp); break;
-          case 'PageDown':   sendKeysym(KS.PageDown); break;
-          default:
-            // let normal text be handled in beforeinput/input
-            return;
+      async function loadOS() {
+        try {
+          const res = await fetch('/auth/user_info', { credentials: 'same-origin' });
+          const ct = res.headers.get('content-type') || '';
+          let os = '';
+          if (ct.includes('application/json')) {
+            const j = await res.json();
+            os = j.os_type;
+          } else {
+            os = (await res.text()).trim();
+          }
+          if (!os) os = 'Virtual Machine';
+          currentOsType = os;
+          document.title = os + ' — Console';
+          if (vmNameEl) vmNameEl.textContent = os;
+          if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
+        } catch {
+          document.title = 'Console';
+          if (vmNameEl) vmNameEl.textContent = 'Console';
+          if (vmSubEl)  vmSubEl.textContent  = 'Remote console via noVNC';
         }
-        e.preventDefault();
+      }
+
+      // ——— Build websocket URL ———
+      const urlParams = new URLSearchParams(window.location.search);
+      const host  = urlParams.get('host') || window.location.hostname || 'localhost';
+      const port  = urlParams.get('port') || window.location.port || (location.protocol === 'https:' ? '443' : '80');
+      const path  = urlParams.get('path') || 'websockify';
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${proto}://${host}:${port}/${path}`;
+
+      // ——— Setup RFB ———
+      const rfb = new RFB(screen, wsUrl, { credentials: {} });
+      rfb.viewOnly = false;
+      rfb.scaleViewport = true;
+      rfb.resizeSession = true;
+      rfb.showDotCursor = true;   // nice on touch devices
+      rfb.focusOnClick = false;   // don't steal focus from our hidden input
+
+      rfb.addEventListener('connect',   () => { setStatus('Connected', 'ok'); setCanvasProps(); });
+      rfb.addEventListener('disconnect', (e) => {
+        const clean = !e || !e.detail || e.detail.clean;
+        setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
       });
 
-      // beforeinput gives us the text being inserted (Android/iOS)
+      // ensure canvas won't grab focus & has proper touch-action
+      function setCanvasProps() {
+        const cv = screen.querySelector('canvas');
+        if (cv) {
+          cv.setAttribute('tabindex', '-1');
+          cv.style.touchAction = 'none';
+        }
+      }
+      setCanvasProps();
+
+      // ——— Controls ———
+      if (btnFull) {
+        btnFull.addEventListener('click', async () => {
+          const el = document.documentElement;
+          try {
+            if (!document.fullscreenElement) await el.requestFullscreen();
+            else await document.exitFullscreen();
+          } catch {}
+        });
+      }
+
+      if (btnDisc) {
+        btnDisc.addEventListener('click', async () => {
+          setStatus('Disconnecting…', 'warn');
+          btnDisc.disabled = true;
+          try {
+            // Prefer POST; fall back to GET if server doesn’t accept it
+            let res = await fetch('/disconnect', { method: 'POST', credentials: 'same-origin' });
+            if (!res.ok) res = await fetch('/disconnect', { credentials: 'same-origin' });
+          } catch {}
+          try { rfb.disconnect(); } catch {}
+          toast('Disconnected', 'warn');
+          btnDisc.disabled = false;
+        });
+      }
+
+      if (btnShot) {
+        btnShot.addEventListener('click', async () => {
+          btnShot.disabled = true;
+          btnShot.textContent = 'Snapshotting…';
+          try {
+            const osType = currentOsType || 'unknown';
+            const res = await fetch('/vm/snapshot', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ os_type: osType })
+            });
+
+            let msg = res.ok ? 'Snapshot created' : 'Snapshot failed';
+            try {
+              const ct = res.headers.get('content-type') || '';
+              if (ct.includes('application/json')) {
+                const data = await res.json();
+                const id = data.id || data.name || data.snapshot || '';
+                if (id) msg = `Snapshot ${id} created`;
+              } else {
+                const t = (await res.text()).trim();
+                if (t) msg = t;
+              }
+            } catch {}
+
+            toast(msg, res.ok ? 'ok' : 'err');
+            setStatus('Connected', res.ok ? 'ok' : 'err');
+          } catch (e) {
+            console.error('[snapshot] fetch failed:', e);
+            toast('Snapshot request failed', 'err');
+            setStatus('Connected', 'err');
+          } finally {
+            btnShot.disabled = false;
+            btnShot.innerHTML = `
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h4l2-2h4l2 2h4v12H4z"/>
+                <circle cx="12" cy="13" r="3"/>
+              </svg> Snapshot
+            `;
+          }
+        });
+      } else {
+        console.error('[ui] #btn-shot not found; snapshot disabled');
+      }
+
+      // ——— Hotkeys (desktop convenience) ———
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'f' && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          btnFull?.click();
+        }
+      });
+
+      // ——— Mobile keyboard bridge ———
+      function unicodeToKeysym(ch) {
+        const cp = ch.codePointAt(0);
+        return (cp <= 0xFF) ? cp : (0x01000000 | cp); // X11 convention for Unicode
+      }
+      const KS = {
+        BackSpace: 0xFF08, Tab: 0xFF09, Return: 0xFF0D, Escape: 0xFF1B,
+        Left: 0xFF51, Up: 0xFF52, Right: 0xFF53, Down: 0xFF54,
+        PageUp: 0xFF55, PageDown: 0xFF56, End: 0xFF57, Home: 0xFF50,
+        Insert: 0xFF63, Delete: 0xFFFF,
+      };
+      function sendKeysym(ks) {
+        try {
+          rfb.sendKey(ks, null, true);  // press
+          rfb.sendKey(ks, null, false); // release
+        } catch (e) {
+          console.warn('sendKey failed', e);
+        }
+      }
+      function sendText(s) {
+        for (const ch of s) sendKeysym(unicodeToKeysym(ch));
+      }
+
+      function focusVKBD() {
+        if (!vkbd) return;
+        try { vkbd.focus({ preventScroll: true }); } catch { vkbd.focus(); }
+      }
+
+      // Tap anywhere on the remote screen to bring up and keep the keyboard
+      ['pointerdown','touchstart','mousedown','pointerup','touchend'].forEach(evt => {
+        screen.addEventListener(evt, () => focusVKBD(), { passive: true });
+      });
+
+      // Special keys from soft keyboard
+      vkbd.addEventListener('keydown', (e) => {
+        const km = {
+          'Backspace': KS.BackSpace, 'Delete': KS.Delete, 'Enter': KS.Return, 'Tab': KS.Tab, 'Escape': KS.Escape,
+          'ArrowLeft': KS.Left, 'ArrowRight': KS.Right, 'ArrowUp': KS.Up, 'ArrowDown': KS.Down,
+          'Home': KS.Home, 'End': KS.End, 'PageUp': KS.PageUp, 'PageDown': KS.PageDown
+        };
+        const ks = km[e.key];
+        if (ks) { e.preventDefault(); sendKeysym(ks); }
+      });
+
+      // Text entry (Android/iOS): this fires before the DOM changes so we can eat it
       vkbd.addEventListener('beforeinput', (e) => {
-        // Handle text and some editing commands
         const t = e.inputType;
         if (t === 'insertText' && e.data) {
           sendText(e.data);
@@ -390,8 +396,13 @@
         } else if (t === 'deleteContentForward') {
           sendKeysym(KS.Delete);
         }
-        // Keep input empty and prevent the browser from storing text
-        e.preventDefault();
+        e.preventDefault(); // keep input empty
+      });
+
+      // Composition (IME) finalization
+      vkbd.addEventListener('compositionend', (e) => {
+        if (e.data) sendText(e.data);
+        vkbd.value = '';
       });
 
       // Fallback for keyboards that only emit "input"
@@ -402,18 +413,14 @@
         }
       });
 
-      // Small hint on first touch devices
+      // Tiny hint for touch users
       const isTouch = matchMedia('(pointer: coarse)').matches;
-      if (isTouch) {
-        setTimeout(() => toast('Tip: tap the screen to type', 'ok'), 400);
-      }
-    }
+      if (isTouch) setTimeout(() => toast('Tip: tap the screen to type', 'ok'), 400);
 
-    // Kick off
-    setStatus('Connecting…');
-    loadOS();
-  });
-</script>
-
+      // Kick off
+      setStatus('Connecting…');
+      loadOS();
+    });
+  </script>
 </body>
 </html>
