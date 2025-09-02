@@ -97,14 +97,25 @@
     }
     .toast .dot { box-shadow:none; }
 
-    /* Hidden-but-focusable input that summons mobile soft keyboard */
+    /* Hidden-but-focusable input that summons mobile soft keyboard
+       Keep it in-viewport so iOS/Android will show the keyboard, but
+       we'll lock body scroll while it's focused to prevent page jumps. */
     #vkbd{
       position: fixed; bottom: 0; left: 0;
       width: 1px; height: 1px;
       opacity: 0; border: 0; padding: 0;
       background: transparent;
       color: transparent; caret-color: transparent;
-      z-index: 1; /* under toolbar; in-viewport so iOS/Android will show keyboard */
+      z-index: 1; /* under toolbar */
+      font-size: 16px; /* avoid iOS zoom on focus */
+    }
+
+    /* body state used when keyboard is up to prevent page reposition */
+    .scroll-locked {
+      width: 100%;
+      position: fixed;  /* freeze the page */
+      left: 0; right: 0;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -250,11 +261,10 @@
         setStatus(clean ? 'Disconnected' : 'Disconnected (error)', clean ? 'warn' : 'err');
       });
 
-      // ensure canvas won't grab focus & has proper touch-action
       function setCanvasProps() {
         const cv = screen.querySelector('canvas');
         if (cv) {
-          cv.setAttribute('tabindex', '-1');
+          cv.setAttribute('tabindex', '-1'); // prevent canvas focusing (which can close kb)
           cv.style.touchAction = 'none';
         }
       }
@@ -340,6 +350,22 @@
         }
       });
 
+      // ——— Scroll lock to prevent page jump on focus ———
+      let scrollY = 0;
+      function lockScroll() {
+        if (document.body.classList.contains('scroll-locked')) return;
+        scrollY = window.scrollY || window.pageYOffset || 0;
+        document.body.classList.add('scroll-locked');
+        document.body.style.top = `-${scrollY}px`;
+      }
+      function unlockScroll() {
+        if (!document.body.classList.contains('scroll-locked')) return;
+        const y = -parseInt(document.body.style.top || '0', 10) || 0;
+        document.body.classList.remove('scroll-locked');
+        document.body.style.top = '';
+        window.scrollTo(0, y);
+      }
+
       // ——— Mobile keyboard bridge ———
       function unicodeToKeysym(ch) {
         const cp = ch.codePointAt(0);
@@ -365,6 +391,7 @@
 
       function focusVKBD() {
         if (!vkbd) return;
+        lockScroll(); // prevent page from jumping when keyboard appears
         try { vkbd.focus({ preventScroll: true }); } catch { vkbd.focus(); }
       }
 
@@ -372,6 +399,9 @@
       ['pointerdown','touchstart','mousedown','pointerup','touchend'].forEach(evt => {
         screen.addEventListener(evt, () => focusVKBD(), { passive: true });
       });
+
+      // Release scroll lock when keyboard input loses focus (keyboard hidden)
+      vkbd.addEventListener('blur', unlockScroll);
 
       // Special keys from soft keyboard
       vkbd.addEventListener('keydown', (e) => {
@@ -384,7 +414,7 @@
         if (ks) { e.preventDefault(); sendKeysym(ks); }
       });
 
-      // Text entry (Android/iOS): this fires before the DOM changes so we can eat it
+      // Text entry (Android/iOS): fires before DOM changes so we can forward & keep input empty
       vkbd.addEventListener('beforeinput', (e) => {
         const t = e.inputType;
         if (t === 'insertText' && e.data) {
@@ -396,7 +426,7 @@
         } else if (t === 'deleteContentForward') {
           sendKeysym(KS.Delete);
         }
-        e.preventDefault(); // keep input empty
+        e.preventDefault();
       });
 
       // Composition (IME) finalization
