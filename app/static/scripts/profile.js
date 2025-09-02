@@ -181,29 +181,37 @@ activate('app'); // default tab
 
 // --- Grafana integration using static iframes ---
 
-// Hard-coded iframe URLs copied from Grafana "Share → Embed"
+// pick ONE:
+const GRAFANA_BASE = '/grafana';                 // same-origin (admin is on vmshare.ru)
+//// const GRAFANA_BASE = 'https://vmshare.ru/grafana'; // cross-origin
+
+function toPublic(src) {
+  return src.replace(/^https?:\/\/localhost:3000/, GRAFANA_BASE);
+}
+
 const GRAFANA_IFRAMES = [
   {
     title: 'Request rate (rps, 1m)',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=4&theme=dark&kiosk&refresh=30s'
+    src: toPublic('http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=4&theme=dark&kiosk&refresh=30s')
   },
   {
     title: 'User-count',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=2&theme=dark&kiosk&refresh=30s'
+    src: toPublic('http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=2&theme=dark&kiosk&refresh=30s')
   },
   {
     title: 'Active-sessions (12h)',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=1&theme=dark&kiosk&refresh=30s'
+    src: toPublic('http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=1&theme=dark&kiosk&refresh=30s')
   },
   {
     title: 'CPU',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=7&theme=dark&kiosk&refresh=30s'
+    src: toPublic('http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=7&theme=dark&kiosk&refresh=30s')
   },
   {
     title: 'RAM',
-    src: 'http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=5&theme=dark&kiosk&refresh=30s'
+    src: toPublic('http://localhost:3000/d-solo/051610f9-e0cf-4fbe-ab97-1ac1644e02a5/app-metrics?orgId=1&from=now-12h&to=now&timezone=browser&panelId=5&theme=dark&kiosk&refresh=30s')
   }
 ];
+
 
 
 
