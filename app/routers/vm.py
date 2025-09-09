@@ -63,11 +63,13 @@ class RunScriptRequest(BaseModel):
 class SnapshotRequest(BaseModel):
     os_type: str
     vmid: str | None = None  # allow FE to pass vmid; fallback to store if omitted
-
+    
 class RemoveSnapshotRequest(BaseModel):
-    uid: str | None = None
-    os_type: str | None = None   # optional fallbacks
-    vmid: str | None = None
+    #uid: str | None = None
+    #os_type: str | None = None   # optional fallbacks
+    #vmid: str | None = None
+    snapshot: str | None = None
+
 
 @router.post("/run-script")
 async def run_vm_script(
@@ -445,6 +447,7 @@ async def remove_snapshot(
     try:
         # Determine filename: prefer explicit `snapshot`, else compose from os_type + vmid
         snap_name = (getattr(request, "snapshot", None) or "").strip()
+        logger.info("[snapshot] snap_name=%s", snap_name)
         if not snap_name:
             os_type = (getattr(request, "os_type", "") or "").strip()
             vmid = (getattr(request, "vmid", "") or "").strip()
