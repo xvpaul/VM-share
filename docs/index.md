@@ -3,9 +3,7 @@ title: VMShare
 layout: default
 ---
 
-# VMShare
-
-Use the links below:
+Docs:
 
 - [API Reference](API.md)
 - [VM Lifecycle](LIFECYCLE.md)
