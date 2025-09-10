@@ -1,3 +1,10 @@
+---
+title: VMShare   # change per page
+---
+
+# VMShare
+
+
 # Virtual Machine Lifecycle
 
 > **Scope:** Single-VM-per-user flow from launch to cleanup for the QEMU + noVNC/websockify stack. This document explains components, data flow, Redis schema, lifecycle steps, concurrency, and failure/cleanup behavior. 

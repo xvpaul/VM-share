@@ -1,4 +1,10 @@
-# Authentication (Project Documentation)
+---
+title: VMShare   # change per page
+---
+
+# VMShare
+
+# Authentication
 
 > **Scope:** Username/password auth backed by PostgreSQL, using bcrypt for password hashing and JWT for sessions. This document covers components, data flow, cookie/JWT handling, endpoints and responses, validation, security considerations, and cleanup behavior.
 

@@ -1,3 +1,10 @@
+---
+title: VMShare   # change per page
+---
+
+# VMShare
+
+
 # Observability (Project Documentation)
 
 > **Scope:** Host & app observability for the VM platform: watchdog alerts (CPU/RAM/disk), Prometheus metrics (HTTP, users, sessions, per‑user), Grafana embedding proxy, DB instrumentation, and operational guidance. Covers components, configuration, endpoints, metric names, behaviors, and recommended improvements.

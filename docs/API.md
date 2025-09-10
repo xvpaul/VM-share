@@ -1,3 +1,10 @@
+---
+title: VMShare   # change per page
+---
+
+# VMShare
+
+
 # API Reference
 
 > **Scope:** Public and authenticated HTTP endpoints for authentication, pages, file upload, sessions, VM lifecycle, and snapshots. Includes request/response schemas, status codes, auth requirements, and notable behaviors based on current code.
