@@ -63,8 +63,7 @@ async def register_user(payload: RegisterJSON, request: Request, db: Session = D
             "access_token": token,
             "token_type": "bearer"
         })
-        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
-        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
+        set_auth_cookie(resp, token)
         return resp
 
     except HTTPException:
@@ -97,14 +96,7 @@ async def login_user(payload: LoginJSON, request: Request, db: Session = Depends
             "token_type": "bearer"
         })
 
-        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
-        logger.info(
-            "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
-            "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
-            user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
-        )
-
-        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
+        set_auth_cookie(resp, token)
         logger.info(f"VM_share/app/routers/auth.py: /login succeeded for '{user.login}' (cookie set)")
         return resp
 
@@ -115,17 +107,17 @@ async def login_user(payload: LoginJSON, request: Request, db: Session = Depends
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-def set_auth_cookie(resp: JSONResponse, token: str, *, dev_localhost: bool = True):
+def set_auth_cookie(resp: JSONResponse, token: str):
     logger.info(
         f"VM_share/app/routers/auth.py: Setting auth cookie "
-        f"(secure={not dev_localhost}, samesite='lax', max_age={COOKIE_MAX_AGE})"
+        f"(secure=True, samesite='lax', max_age={COOKIE_MAX_AGE})"
     )
     resp.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=not dev_localhost,   # <----- SET TRUE!!!
-        samesite="lax",             # <----- NONE
+        secure=True,  
+        samesite="lax",            
         path="/",
         max_age=COOKIE_MAX_AGE,
     )
@@ -150,14 +142,7 @@ async def login_token_alias(payload: LoginJSON, request: Request, db: Session = 
 
         resp = JSONResponse({"access_token": token, "token_type": "bearer", "id": user.id})
 
-        dev_localhost = os.getenv("DEV", "true").lower() in ("1", "true", "yes")
-        logger.info(
-            "VM_share/app/routers/auth.py: Setting auth cookie for user '%s' "
-            "(dev_localhost=%s => secure=%s, samesite='lax', max_age=%s)",
-            user.login, dev_localhost, str(not dev_localhost).lower(), COOKIE_MAX_AGE
-        )
-
-        set_auth_cookie(resp, token, dev_localhost=dev_localhost)
+        set_auth_cookie(resp, token)
         logger.info(f"VM_share/app/routers/auth.py: /token login succeeded for '{user.login}' (cookie set)")
         return resp
 

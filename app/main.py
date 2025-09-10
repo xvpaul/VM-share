@@ -2,7 +2,6 @@
 from contextlib import asynccontextmanager
 import os, asyncio, logging
 from pathlib import Path
-import configs.config as logs
 
 logger = logging.getLogger(__name__)
 
