@@ -1,8 +1,11 @@
 ---
-title: VMShare   # change per page
+title: VMShare
+layout: default
 ---
 
 # VMShare
+
+Use the links below:
 
 - [API Reference](API.md)
 - [VM Lifecycle](LIFECYCLE.md)

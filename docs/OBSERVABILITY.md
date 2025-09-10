@@ -1,8 +1,8 @@
 ---
-title: VMShare   # change per page
+title: Observability
+layout: default
+permalink: /observability/
 ---
-
-# VMShare
 
 
 # Observability (Project Documentation)

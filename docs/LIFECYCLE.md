@@ -1,8 +1,9 @@
 ---
-title: VMShare   # change per page
+title: VM Lifecycle
+layout: default
+permalink: /lifecycle/
 ---
 
-# VMShare
 
 
 # Virtual Machine Lifecycle

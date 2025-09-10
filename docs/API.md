@@ -1,8 +1,8 @@
 ---
-title: VMShare   # change per page
+title: API Reference
+layout: default
+permalink: /api/
 ---
-
-# VMShare
 
 
 # API Reference

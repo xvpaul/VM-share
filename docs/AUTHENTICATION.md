@@ -1,8 +1,8 @@
 ---
-title: VMShare   # change per page
+title: Authentication
+layout: default
+permalink: /auth/
 ---
-
-# VMShare
 
 # Authentication
 
