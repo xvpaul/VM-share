@@ -5,6 +5,10 @@
 The VM Access Platform allows users to launch and interact with fully operable virtual machines directly in their web browser.
 No local installation is required — just open the app, log in, and start using your VM through a noVNC-powered graphical desktop. You can run any operating system supported by QEMU and noVNC, though the available choices on vmshare.ru are currently limited by the hosting server’s hardware and configuration.
 
+**Web-site:**
+  https://vmshare.ru/
+
+
 **Built for:**
 
 * Safe sandboxing and experimentation with Linux distributions
