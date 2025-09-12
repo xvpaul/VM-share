@@ -8,10 +8,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 logger.info("grafana_proxy: module loaded")
 
-# NOTE:
-# - We serve Grafana under /grafana via Nginx subpath.
-# - So the safest base for iframes is the SAME ORIGIN relative path '/grafana'.
-# - If you ever move Grafana elsewhere, set GRAFANA_IFRAME_BASE accordingly.
 IFRAME_BASE = os.getenv("GRAFANA_IFRAME_BASE", "/grafana").rstrip("/")
 
 @router.get("/grafana/panel_iframe_src")

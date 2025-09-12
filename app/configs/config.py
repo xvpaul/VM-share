@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from dotenv import load_dotenv, find_dotenv
 import os, logging, redis as _redis
 
-# --- Load .env (doesn't override real env vars) ---
+# --- Load .env ---
 load_dotenv(find_dotenv(filename=".env"), override=False)
 
-# --- tiny env helper ---
+# --- env helper ---
 def env(name, default=None, *, required=False, cast=str):
     v = os.getenv(name, default)
     if required and (v is None or v == ""):
@@ -101,7 +101,7 @@ logging.basicConfig(
     force=True,
 )
 
-# ---------- Pretty namespaces for simple imports ----------
+# ---------- namespaces for simple imports ----------
 config = SimpleNamespace(
     DATABASE_URL=DATABASE_URL,
     PORT=PORT,

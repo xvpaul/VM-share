@@ -44,7 +44,7 @@ async def send_post(
     user: User = Depends(get_current_user),
     # db: Session = Depends(get_db),
     # store: SessionStore = Depends(get_session_store),
-    file: UploadFile = File(...),  # required; no body text, just the file
+    file: UploadFile = File(...), 
 ):
     try:
         user_id = str(user.id)

@@ -445,7 +445,6 @@ async def remove_snapshot(
     db: Session = Depends(get_db),
 ):
     try:
-        # Determine filename: prefer explicit `snapshot`, else compose from os_type + vmid
         snap_name = (getattr(request, "snapshot", None) or "").strip()
         logger.info("[snapshot] snap_name=%s", snap_name)
         if not snap_name:

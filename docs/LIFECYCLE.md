@@ -118,26 +118,19 @@ permalink: /lifecycle/
   **A:** QEMU exposes **VNC** on a local **UNIX socket** (`vnc-<vmid>.sock`). **websockify** listens on a per‑VM **TCP port** (`http_port`) and converts **WebSocket ⇄ raw VNC bytes**, connecting locally to that UNIX socket. **QMP** is a separate **UNIX socket** (`qmp-<vmid>.sock`) used by backend tools for management (powerdown, status, etc.) and is never exposed to the browser.
 
 * **Q: Does a single VM use multiple TCP ports?**
-  **A:** No. Each running VM uses **one** public TCP port (for websockify/noVNC). System‑wide you’ll see **many ports** if many VMs run at once. If you want only **one external port** (e.g., 443), put an HTTPS reverse proxy in front and route `wss:///ws/<vmid>` → the VM’s internal port (looked up in Redis).
+  **A:** No. Each running VM uses **one** public TCP port (for websockify/noVNC). System‑wide you’ll see **many ports** if many VMs run at once. 
 
 * **Q: Why use UNIX sockets for VNC/QMP instead of TCP?**
   **A:** UNIX sockets are **local‑only**, simpler to permission, and avoid exposing extra public ports. Browsers can’t talk UNIX sockets, so websockify provides the one necessary **WebSocket/TCP** entry point.
 
-* **Q: Who chooses the VM’s public port? Is this about port exhaustion?**
-  **A:** `find_free_port()` asks the OS for a **free port** to avoid **collisions**, then websockify binds to it. This is **not** about "port exhaustion" of client ephemeral ports—just safe server‑side port selection per VM.
+* **Q: Who chooses the VM’s public port?**
+  **A:** `find_free_port()` asks the OS for a **free port** to avoid **collisions**, then websockify binds to it. This is about safe server‑side port selection per VM.
 
 * **Q: How is cleanup triggered when a user closes the browser tab?**
-  **A:** The websockify monitor thread watches stdout for disconnect lines (e.g., "client closed connection"). On detection, it calls `cleanup_vm(vmid, store)`. For multiple open tabs, consider tracking a **connection count** or adding a short **grace period** before teardown so the last connection drives cleanup.
+  **A:** The websockify monitor thread watches stdout for disconnect lines (e.g., "client closed connection"). On detection, it calls `cleanup_vm(vmid, store)`.
 
 * **Q: What is QMP used for in this setup?**
-  **A:** QMP is the **management plane**. Use it for graceful operations (e.g., `system_powerdown`), querying VM status, or debugging. In cleanup, you may first send a QMP powerdown, then fall back to `SIGTERM` if needed.
-
-* **Q: Security best practices?**
-  **A:** Bind websockify to **127.0.0.1**, front it with an HTTPS reverse proxy to serve **WSS** with auth, never expose **QMP** externally, and firewall any `0.0.0.0:<port>` listeners if you must use them.
-
-* **Q: What minimal fields must be stored in Redis for reliable lifecycle management?**
-  **A:** `vmid`, `user_id`, `os_type`, `overlay` (or `iso` for custom), `vnc_socket`, `qmp_socket`, `http_port`, **`pid` (QEMU)**, **`websockify_pid`**, `started_at`, and optionally `last_seen`.
----
+  **A:** QMP is the **management plane**. Use it for graceful operations (e.g., `system_powerdown`), querying VM status, or debugging. 
 
 ## Appendix: Sequence (text diagram)
 

@@ -141,19 +141,16 @@ permalink: /auth/
   **A:** Both are accepted. `get_current_user` prefers the **cookie** (`access_token`) and falls back to the `Authorization: Bearer` header.
 
 * **Q: Why JWT + cookie instead of localStorage?**
-  **A:** The **HttpOnly** cookie prevents JavaScript access (mitigates XSS token theft). You still get stateless auth with JWT expiration.
+  **A:** The **HttpOnly** cookie prevents JavaScript access (mitigates XSS token theft). I get stateless auth with JWT expiration.
 
 * **Q: Does logout revoke the JWT server‑side?**
-  **A:** No, it deletes the cookie. The JWT remains valid until `exp`. For true revocation, add a **deny‑list** using `jti`.
+  **A:** No, it deletes the cookie. The JWT remains valid until `exp`.
 
 * **Q: Why does `/register` return 409 when a user already exists?**
   **A:** To avoid **user enumeration** and password probing. Registration should not confirm credential validity for existing accounts.
 
-* **Q: What about CSRF?**
-  **A:** SameSite=Lax reduces risk, but for POST/DELETE that can be cross‑site, add a **CSRF token** or require `Authorization: Bearer` headers.
-
 * **Q: How are snapshot limits enforced?**
-  **A:** At the **database level** via three check constraints: non‑negative capacity, non‑negative stored, and `stored ≤ capacity`. The application should also validate before updates (e.g., when creating or pruning VM snapshots) and return a clear 4xx if a request would exceed the quota.
+  **A:** At the **database level** via three check constraints: non‑negative capacity, non‑negative stored, and `stored ≤ capacity`. 
 
 * **Q: What are the defaults for new users?**
   **A:** `snapshot_storage_capacity=300`, `snapshot_stored=0`, `role='user'` (all via DB `server_default`). These can be changed later via admin flows or migrations.
@@ -174,6 +171,3 @@ Client → POST /logout
 API   → delete cookie → cleanup VM (if any) → 200
 ```
 
----
-
-**End of document.**

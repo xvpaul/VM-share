@@ -138,8 +138,6 @@ class QemuOverlayManager:
             "pid": qemu_pid,
         }
 
-    
-    # Replace your current peek_iso with this:
     @staticmethod
     def peek_iso(iso_path: str, max_files: int = 200) -> dict:
         """

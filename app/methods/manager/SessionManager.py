@@ -24,16 +24,20 @@ class SessionStore:
         self.r.ping()
 
     # ----- key helpers
-    def _k_vm(self, vmid: str) -> str:           return f"vm:{vmid}"
-    def _k_active(self) -> str:                   return "vms:active"
-    def _k_user_vms(self, uid: str) -> str:       return f"user:{uid}:vms"
-    def _k_by_os(self, os_type: str) -> str:      return f"vms:by_os:{os_type}"
+    def _k_vm(self, vmid: str) -> str:           
+        return f"vm:{vmid}"
+    def _k_active(self) -> str:                   
+        return "vms:active"
+    def _k_user_vms(self, uid: str) -> str:       
+        return f"user:{uid}:vms"
+    def _k_by_os(self, os_type: str) -> str:      
+        return f"vms:by_os:{os_type}"
     # PID index (pid → vmid)
-    def _k_pid(self, pid: str) -> str:            return f"vm:by_pid:{pid}"
+    def _k_pid(self, pid: str) -> str:            
+        return f"vm:by_pid:{pid}"
 
-    # ----- API (compat)
+    # ----- API
     def get_running_by_user(self, user_id: str) -> Optional[dict]:
-        # newest first; check a few recent entries
         for vmid in self.r.zrevrange(self._k_user_vms(user_id), 0, 5):
             d = self.get(vmid)
             if d:
@@ -44,7 +48,6 @@ class SessionStore:
         h = self.r.hgetall(self._k_vm(vmid))
         return {"vmid": vmid, **h} if h else None
 
-    # NEW: quick reverse lookups
     def get_vmid_by_pid(self, pid: str) -> Optional[str]:
         if not pid:
             return None
@@ -56,7 +59,6 @@ class SessionStore:
         return self.get(vmid) if vmid else None
 
     def set(self, vmid: str, payload: dict) -> None:
-        # flatten & stringify for Redis
         data = {k: ("" if v is None else str(v)) for k, v in payload.items()}
         uid     = data.get("user_id")
         os_type = data.get("os_type")

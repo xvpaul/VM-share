@@ -1,4 +1,4 @@
-# /app/methods/manager/__init__.py (or a dedicated di.py)
+# /app/methods/manager/__init__.py
 from .ProcessManager import get_proc_registry
 from .WebsockifyService import WebsockifyService
 
